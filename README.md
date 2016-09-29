@@ -1,11 +1,9 @@
 <table><tr>
 <td><img src="https://github.com/pubref/rules_protobuf/blob/master/images/bazel.png" width="120"/></td>
 <td><img src="https://node-os.com/images/nodejs.png" width="120"/></td>
-<td><img src="https://www.npmjs.com/static/images/npm-logo.svg" width="120"/></td>
 </tr><tr>
 <td>Bazel</td>
 <td>NodeJs</td>
-<td>npm</td>
 </tr></table>
 
 # `rules_node` [![Build Status](https://travis-ci.org/pubref/rules_node.svg?branch=master)](https://travis-ci.org/pubref/rules_node)
@@ -17,7 +15,7 @@ dependencies.  This will download the nodejs toolchain including
 ```python
 git_repository(
     name = "org_pubref_rules_node",
-    tag = "v0.1.0",
+    tag = "v0.2.0",
     remote = "https://github.com/pubref/rules_node.git",
 )
 
