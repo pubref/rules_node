@@ -39,8 +39,9 @@ def _get_node_modules_dir_from_sourcefile(file):
 def node_binary_impl(ctx):
     inputs = []
     srcs = []
-    node_paths = []
     script = ctx.file.main
+    node = ctx.file._node
+    node_paths = []
 
     for file in ctx.files.modules:
         if not file.basename.endswith("node_modules"):
@@ -55,7 +56,6 @@ def node_binary_impl(ctx):
         node_paths += [_get_node_modules_dir_from_package_json(lib.package_json)]
 
     node_paths = list(set(node_paths))
-    node = ctx.file._node
 
     ctx.file_action(
         output = ctx.outputs.executable,

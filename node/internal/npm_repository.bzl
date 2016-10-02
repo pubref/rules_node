@@ -10,7 +10,7 @@ def _execute(ctx, cmds):
     result = ctx.execute(cmds)
     if result.return_code:
         fail(" ".join(cmds) + "failed: %s" %(result.stderr))
-    return result.stdout
+    return result
 
 
 def _dnode_modules(ctx, node_modules_path):
@@ -30,8 +30,7 @@ def _dnode_modules(ctx, node_modules_path):
         cmd.append("--exclude")
         cmd += ctx.attr.exclude_package_json_keys
 
-    output = _execute(ctx, cmd)
-    print(output)
+    output = _execute(ctx, cmd).stdout
 
 
 def _check_sha256(ctx, node_modules_path):
@@ -66,16 +65,17 @@ def _check_sha256(ctx, node_modules_path):
     ])
 
     expected = ctx.attr.sha256
-    actual = _execute(ctx, sha256 + [tarfile]).split(" ")[0]
+    actual = _execute(ctx, sha256 + [tarfile]).stdout.split(" ")[0]
     if actual != expected:
         fail(ctx.name + " node_modules archive sha256 [%s] does not match expected value [%s]" %(actual, expected))
 
+    ctx.file("node_modules.sha256", actual)
 
 def _npm_repository_impl(ctx):
     node = ctx.path(ctx.attr.node)
+    nodedir = node.dirname.dirname
     npm = ctx.path(ctx.attr.npm)
     node_modules_path = ctx.attr.node_modules_path
-
     modules = []
     for k, v in ctx.attr.deps.items():
         if v:
@@ -87,7 +87,9 @@ def _npm_repository_impl(ctx):
         node,
         npm,
         "install",
+        #"--loglevel", "silly", # info
         "--prefix", ctx.path(""),
+        "--nodedir=%s" % nodedir,
         "--global"
     ]
 
@@ -96,7 +98,8 @@ def _npm_repository_impl(ctx):
 
     cmd += modules
 
-    _execute(ctx, cmd)
+    output = _execute(ctx, cmd).stdout
+    #print("npm install output: %s" % output)
 
     if ctx.attr.sha256:
         _dnode_modules(ctx, node_modules_path)

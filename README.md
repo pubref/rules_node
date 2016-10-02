@@ -127,7 +127,6 @@ node_library(
     srcs = [
         "qux.js",
     ],
-    use_prefix = False,
 )
 ```
 

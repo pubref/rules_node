@@ -1,5 +1,3 @@
-load("//node:internal/node_repository.bzl", "node_repository")
-
 NODE_TOOLCHAIN_BUILD_FILE = """
 package(default_visibility = [ "//visibility:public" ])
 exports_files([
