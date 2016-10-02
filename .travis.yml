@@ -3,7 +3,7 @@ sudo: required
 language: node_js
 
 env:
-  - V=HEAD URL=http://ci.bazel.io/job/Bazel/JAVA_VERSION=1.8,PLATFORM_NAME=linux-x86_64/lastSuccessfulBuild/artifact/output/ci/bazel--installer.sh FLAGS='--worker_verbose --strategy=Javac=worker --strategy=JsChecker=worker'
+  - V=0.3.2rc3 URL=https://storage.googleapis.com/bazel/0.3.2/rc3/bazel-0.3.2rc3-installer-linux-x86_64.sh FLAGS=''
   - V=0.3.2rc2 URL=https://storage.googleapis.com/bazel/0.3.2/rc2/bazel-0.3.2rc2-installer-linux-x86_64.sh FLAGS=''
   - V=0.3.1 URL=https://github.com/bazelbuild/bazel/releases/download/0.3.1/bazel-0.3.1-installer-linux-x86_64.sh FLAGS=''
 
@@ -20,13 +20,26 @@ script:
       --batch \
       --host_jvm_args=-Xmx500m \
       --host_jvm_args=-Xms500m \
-      build \
+      test \
       --verbose_failures \
       --sandbox_debug \
       --spawn_strategy=standalone \
       --genrule_strategy=standalone \
       --local_resources=400,1,1.0 \
-      //examples/... \
+      //... \
+      $FLAGS
+    bazel \
+      --output_base=$HOME/.cache/bazel \
+      --batch \
+      --host_jvm_args=-Xmx500m \
+      --host_jvm_args=-Xms500m \
+      run \
+      --verbose_failures \
+      --sandbox_debug \
+      --spawn_strategy=standalone \
+      --genrule_strategy=standalone \
+      --local_resources=400,1,1.0 \
+      //examples/foo \
       $FLAGS
 
 notifications:

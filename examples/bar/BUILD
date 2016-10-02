@@ -1,11 +1,6 @@
-load("//node:rules.bzl", "node_binary", "npm_library", "node_library")
-
-npm_library(
-    name = "glob",
-)
+load("//node:rules.bzl", "node_binary", "node_library")
 
 node_binary(
     name = "bar",
-    main_script = "bar.js",
-    npm_deps = ["glob"],
+    main = "bar.js",
 )

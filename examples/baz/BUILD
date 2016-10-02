@@ -1,15 +1,12 @@
 package(default_visibility = ["//visibility:public"])
 
-load("//node:rules.bzl", "node_binary", "npm_library", "node_library")
-
-npm_library(name = "glob")
+load("//node:rules.bzl", "node_binary", "node_library")
 
 node_library(
     name = "baz",
-    main_script = "index.js",
+    main = "index.js",
     srcs = [
         "qux.js"
     ],
-    npm_deps = ["glob"],
-    use_prefix = False,
+    modules = ["@npm_glob//:modules"],
 )

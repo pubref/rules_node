@@ -1,5 +1,5 @@
 _js_filetype = FileType([".js"])
-
+_modules_filetype = FileType(["node_modules"])
 
 def _get_node_modules_dir(file, include_node_modules = True):
     filename = str(file)
@@ -38,15 +38,15 @@ def _copy_to_namespace(base, file):
 
 
 def node_library_impl(ctx):
-    node = ctx.executable.node
-    npm = ctx.executable.npm
+    node = ctx.executable._node
+    npm = ctx.executable._npm
     lib_name = _get_lib_name(ctx)
     stage_name = lib_name + ".npmfiles"
 
     srcs = ctx.files.srcs
-    main = ctx.file.main_script
-    if not main and len(srcs) > 0:
-        main = srcs[0]
+    script = ctx.file.main
+    if not script and len(srcs) > 0:
+        script = srcs[0]
 
     package_json_template_file = ctx.file.package_json_template_file
     package_json_file = ctx.new_file(stage_name + "/package.json")
@@ -54,8 +54,8 @@ def node_library_impl(ctx):
 
     transitive_srcs = []
 
-    npm_deps = []
-    transitive_npm_deps = {}
+    modules = ctx.attr.modules
+    transitive_modules = []
 
     files = []
     for d in ctx.attr.data:
@@ -65,27 +65,16 @@ def node_library_impl(ctx):
     for dep in ctx.attr.deps:
         lib = dep.node_library
         transitive_srcs += lib.transitive_srcs
-
-    for dep in ctx.attr.npm_deps:
-        npm_deps.append(dep)
-        npm_lib = dep.npm_library
-        transitive_npm_deps += npm_lib.deps
-
-    #print("transitive_npm_deps: %s" % transitive_npm_deps)
-    deps_entries = ['"%s": "%s"' % (k, v) for k, v in transitive_npm_deps.items()]
-    deps_str = "{" + ",".join(deps_entries) + "}"
-
-    #print("deps_str: %s" % deps_str)
+        transitive_modules += lib.transitive_modules
 
     ctx.template_action(
         template = package_json_template_file,
         output = package_json_file,
         substitutions = {
             "%{name}": lib_name,
-            "%{main}": main.short_path if main else "",
-            "%{version}": ctx.attr.semver,
+            "%{main}": script.short_path if script else "",
+            "%{version}": ctx.attr.version,
             "%{description}": ctx.attr.d,
-            "%{dependencies}": deps_str,
         },
     )
 
@@ -96,8 +85,8 @@ def node_library_impl(ctx):
     cmds = []
     cmds += ["mkdir -p %s" % staging_dir]
 
-    if main:
-        cmds += _copy_to_namespace(staging_dir, main)
+    if script:
+        cmds += _copy_to_namespace(staging_dir, script)
     for src in srcs:
         cmds += _copy_to_namespace(staging_dir, src)
     for file in files:
@@ -112,10 +101,6 @@ def node_library_impl(ctx):
         "--prefix",
         npm_prefix,
     ]
-
-    if ctx.attr.registry:
-        install_cmd.append("--registry")
-        install_cmd.append(ctx.attr.registry.npm_registry.url)
 
     install_cmd.append(staging_dir)
     cmds.append(" ".join(install_cmd))
@@ -140,8 +125,8 @@ def node_library_impl(ctx):
             label = ctx.label,
             srcs = srcs,
             transitive_srcs = srcs + transitive_srcs,
-            npm_deps = npm_deps,
-            transitive_npm_deps = transitive_npm_deps,
+            modules = modules,
+            transitive_modules = modules + transitive_modules,
             package_json = npm_package_json_file,
             npm_package_json = npm_package_json_file,
         ),
@@ -153,10 +138,10 @@ node_library = rule(
         "srcs": attr.label_list(
             allow_files = _js_filetype,
         ),
-        "semver": attr.string(
+        "version": attr.string(
             default = "0.0.0",
         ),
-        "main_script": attr.label(
+        "main": attr.label(
             mandatory = False,
             single_file = True,
             allow_files = _js_filetype,
@@ -171,27 +156,8 @@ node_library = rule(
         "deps": attr.label_list(
             providers = ["node_library"],
         ),
-        "npm_deps": attr.label_list(
-            providers = ["npm_library"],
-        ),
-        "node": attr.label(
-            default = Label("//node/toolchain:node_tool"),
-            single_file = True,
-            allow_files = True,
-            executable = True,
-            cfg = "host",
-        ),
-        "npm": attr.label(
-            default = Label("//node/toolchain:npm_tool"),
-            single_file = True,
-            allow_files = True,
-            executable = True,
-            cfg = "host",
-        ),
-        "registry": attr.label(
-            single_file = True,
-            allow_files = False,
-            providers = ["npm_registry"],
+        "modules": attr.label_list(
+            allow_files = _modules_filetype,
         ),
         "package_json_template_file": attr.label(
             single_file = True,
@@ -200,5 +166,19 @@ node_library = rule(
         ),
         "prefix": attr.string(default = "workspace"),
         "use_prefix": attr.bool(default = False),
+        "_node": attr.label(
+            default = Label("@org_pubref_rules_node_toolchain//:node_tool"),
+            single_file = True,
+            allow_files = True,
+            executable = True,
+            cfg = "host",
+        ),
+        "_npm": attr.label(
+            default = Label("@org_pubref_rules_node_toolchain//:npm_tool"),
+            single_file = True,
+            allow_files = True,
+            executable = True,
+            cfg = "host",
+        ),
     },
 )

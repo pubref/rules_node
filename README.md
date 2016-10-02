@@ -15,7 +15,7 @@ dependencies.  This will download the nodejs toolchain including
 ```python
 git_repository(
     name = "org_pubref_rules_node",
-    tag = "v0.2.0",
+    tag = "v0.3.0",
     remote = "https://github.com/pubref/rules_node.git",
 )
 
@@ -29,92 +29,117 @@ node_repositories()
 | Rule | Description |
 | ---: | :---------- |
 | [node_repositories](#node_repositories) | Install node toolchain. |
-| [npm_library](#npm_library) | Declare an external npm dependency. |
+| [npm_repository](#npm_repository) | Install a set of npm dependencies. |
 | [node_library](#node_library) | Define a local npm module. |
 | [node_binary](#node_binary) | Build or execute a nodejs script. |
 
 # Example
 
 ```python
-load("@org_pubref_rules_node//node:rules.bzl", "node_binary", "npm_library")
-
-npm_library(
-    name = "glob",
-)
-
-npm_library(
-    name = "react-stack",
-    deps = {
-        "react": "15.3.2",
-        "react-dom": "15.3.2",
-    },
-)
+load("@org_pubref_rules_node//node:rules.bzl", "node_binary")
 
 node_binary(
     name = "foo",
-    main_script = "foo.js",
-    npm_deps = ["glob", "react-stack"],
+    main = "foo.js",
+    modules = [
+        "@npm_react_stack//:modules",
+    ],
 )
 ```
 
 ## node_repositories
 
-WORKSPACE rule.  No current options.
+WORKSPACE rule that downloads and configures the node toolchain.
 
-## npm_library
+## npm_repository
 
-Declares a set of npm dependencies.  Functionally equivalent to `npm
-install ...`.
+Install a set of npm dependencies into a `node_modules` folder as an
+external workspace.  For example:
 
-Takes two forms:
+```python
+# In WORKSPACE
+load("@org_pubref_rules_node//node:rules.bzl", "npm_repository")
 
-1. **Single import**: uses the name of the rule (see `glob` above).
+npm_repository(
+    name = "npm_react_stack",
+    deps = {
+        "react": "15.3.2",
+        "react-dom": "15.3.2",
+    },
+    sha256 = "6ee4d8e564b0fe6a8bd2af054a123ded2cd48a3f908b10990907336107394042",
+)
+```
 
-1. **Multiple import**: uses a string_dict declaring the
-   `name@version` dependency. (see `react-stack` above).
+You can then refer to `@npm_react_stack//:modules` in the `modules`
+attribute of a `node_binary` or `node_library` rule.
+
+#### About the sha256 option
+
+`sha256` is optional.  The expected value is the output of `sha256sum
+node_modules.tar` (linux) or `shasum -a256 node_modules.tar` (osx),
+where `node_modules.tar` is an archive file created from the aggregate
+contents of the `node_modules` folder created by `npm install` (and
+where (hopefully) all non-deterministic bits (timestamps, variable
+data) have been stripped out).
+
+There is no convenient way to determine this sha256 other than by
+attempting to install it against a false value (for example: `sha256 =
+"foo"`), at which point bazel will print the expected value.  You can
+then copy-paste that output into your `WORKSPACE` file.
+
+*This assumes you trust the network and the origin of the files* (only
+you can determine this).  By setting a `sha256`, you can guard against
+the code changing, but you are not guarding against a malicious
+attacker sneaking in bogus code in the first place.
+
+#### What gets removed before determining the sha256?
+
+In order to make npm deterministic it is necessary to:
+
+1. Remove all file timestamps and user/group information from
+   node_modules.
+
+2. Make sure the keys in `package.json` are sorted.
+
+3. Remove custom npm-related generated fields in `package.json` files
+   that carry non-deterministic data.
+
+If you find that the
+[default list of blacklisted/excluded attributes](node/internal/npm_repository.bzl)
+is either too aggressive or too lax, it can be configured via the
+`exclude_package_json_keys` attribute.
 
 ## node_library
 
 This rule accepts a list of `srcs` (`*.js`) and other configuration
 attributes. When depended upon, it generates a `package.json` file
 describing the module and the `npm install`'s it in a local
-`node_modules` folder.  The name of the module is the package label,
-substituting `/` (slash) with `-` (dash). For example:
+`node_modules` folder within `bazel-bin`.  The name of the module is
+taken by munging the package label, substituting `/` (slash) with `-`
+(dash). For example:
 
 ```python
 load("//node:rules.bzl", "node_library")
 
 node_library(
     name = "baz",
-    main_script = "index.js",
+    main = "index.js",
     srcs = [
-        "qux.js"
+        "qux.js",
     ],
-    npm_deps = ["glob"],
     use_prefix = False,
 )
 ```
 
-Is installed as:
+This will be installed as:
 
 ```sh
 INFO: From NpmInstallLocal examples/baz/lib/node_modules/examples-baz/package.json:
 /private/var/tmp/_bazel_user/178d7438552046b1be3cba61fe7b75a8/execroot/rules_node/bazel-out/local-fastbuild/bin/examples/baz/lib
 `-- examples-baz@0.0.0
-  `-- glob@7.1.0
-    +-- fs.realpath@1.0.0
-    +-- inflight@1.0.5
-    | `-- wrappy@1.0.2
-    +-- inherits@2.0.3
-    +-- minimatch@3.0.3
-    | `-- brace-expansion@1.1.6
-    |   +-- balanced-match@0.4.2
-    |   `-- concat-map@0.0.1
-    +-- once@1.4.0
-    `-- path-is-absolute@1.0.0
 ```
 
-And can be `require()`'d in another module as follows:
+The local modules can be `require()`'d in another module as follows:
 
 ```js
 var baz = require("examples-baz");
@@ -129,14 +154,6 @@ makes this very clean and convenient.
 
 Creates an executable script that will run the file named in the
 `main_script` attribute.  Paths to dependent `node_library` and
-`npm_library` rules (each one having a `node_modules` subdirectory)
-are used to construct a `NODE_PATH` environment variable that the
-`node` executable will use to fulfill `require` dependencies.
-
----
-
-> **WARNING**: these rules are not hermetic (or by that measure,
-> secure)!  It trusts that the `npm install` command does what is it
-> supposed to do, and there is no current support for validating that
-> a particular npm package(s) matches a sha256 (this is the the norm
-> for npm, but it's sub-standard for bazel).
+`@npm_repository//:modules` labels are used to construct a `NODE_PATH`
+environment variable that the `node` executable will use to fulfill
+`require` dependencies.
