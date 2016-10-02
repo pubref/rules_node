@@ -66,7 +66,7 @@ npm_repository(
         "react": "15.3.2",
         "react-dom": "15.3.2",
     },
-    sha256 = "6ee4d8e564b0fe6a8bd2af054a123ded2cd48a3f908b10990907336107394042",
+    sha256 = "dedabd07bf8399ef5bd6032e87a3ea17eef08183d8766ccedaef63d7707283b6",
 )
 ```
 
