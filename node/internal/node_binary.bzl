@@ -27,7 +27,6 @@ def _get_node_modules_dir_from_package_json(file):
     return d
 
 
-
 def _get_node_modules_dir_from_sourcefile(file):
     bin = str(file)
     parts = bin.partition("[source]]")
@@ -83,7 +82,8 @@ node_binary = rule(
     attrs = {
         "main": attr.label(
             single_file = True,
-            allow_files = _js_filetype,
+            allow_files = True,
+            #allow_files = _js_filetype,
         ),
         "data": attr.label_list(
             allow_files = True,

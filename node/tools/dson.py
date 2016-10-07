@@ -20,24 +20,31 @@ def get_default_excludes():
     ]
 
 class Rewriter:
-    def __init__(self, verbose, excludes):
+    def __init__(self, verbose, filenames, excludes):
         self.verbose = verbose
+        self.filenames = filenames
         self.excludes = excludes
         self._current_filename = ""
         if verbose > 1:
+            print("rewriter filenames: %s" % self.filenames)
             print("rewriter excludes: %s" % self.excludes)
         if verbose > 2:
-            print("rewriter excludes: %s" % self.excludes)
             self.union = {}
 
     def walk_path(self, path):
         for subdir, dirs, files in os.walk(path):
             for file in files:
-                if "package.json" == file:
+                if file in self.filenames:
+                    if self.verbose > 2:
+                        print("hit: file %s" % file)
                     filepath = os.path.join(subdir, file)
-                    self.process_package_json_file(filepath)
+                    self.process_json_file(filepath)
+                else:
+                    if self.verbose > 2:
+                        print("miss: file %s not in %s" % (file, self.filenames))
 
-    def process_package_json_file(self, file):
+
+    def process_json_file(self, file):
         self._current_filename = file
         if self.verbose > 1:
             print "File: " + file
@@ -82,18 +89,35 @@ class Rewriter:
 
 def main():
     parser = argparse.ArgumentParser(
-        description='Rewrite package json files deterministically.')
+        description='Rewrite all json files deterministically within a file tree.')
     parser.add_argument("--path", nargs="+", default = [],
                         help='The root path to start file walk.')
-    parser.add_argument("--exclude", nargs="+", default = [],
-                        help='Key names to exclude from package json.')
+    parser.add_argument("--exclude", nargs="*", action="append", default = [],
+                        help='Top-level key names to exclude from matching json files.')
+    parser.add_argument("--filename", nargs=1, action="append", default = [],
+                        help='Json filenames to match (exact match) when traversing path, example "package.json" or "bower.json"')
     parser.add_argument("--verbose", action="count", default=0,
                         help='Print more debug messages.')
     args = parser.parse_args()
-    excludes  = args.exclude or get_default_excludes()
-    rewriter = Rewriter(args.verbose, excludes)
+
+    excludes = []
+    for keys in args.exclude:
+        excludes += keys
+    if not excludes:
+        excludes = get_default_excludes()
+
+    filenames = []
+    for files in args.filename:
+        filenames += files
+    if not filenames:
+        filename = ["package.json"]
+
+    rewriter = Rewriter(args.verbose, filenames, excludes)
+
     for path in args.path:
+        print("walking " + path)
         rewriter.walk_path(path)
+
     rewriter.report
 
 if __name__ == '__main__':

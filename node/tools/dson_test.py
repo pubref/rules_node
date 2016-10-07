@@ -1,11 +1,13 @@
 import json
 import unittest
-from dnode_modules import Rewriter, get_default_excludes
+from dson import Rewriter, get_default_excludes
 
 class RewriteTest(unittest.TestCase):
     def __init__(self, *args, **kwargs):
         super(RewriteTest, self).__init__(*args, **kwargs)
-        self.rewriter = Rewriter(verbose=0, excludes=get_default_excludes())
+        self.rewriter = Rewriter(verbose=0,
+                                 filenames = ["package.json"],
+                                 excludes=get_default_excludes())
 
     def strip(self, s):
         return self.rewriter.strip_excludes(json.loads(s))

@@ -1,9 +1,9 @@
 py_test(
-    name = "dnode_modules_test",
+    name = "dson_test",
     size = "small",
     srcs = [
-        "dnode_modules.py",
-        "dnode_modules_test.py",
+        "dson.py",
+        "dson_test.py",
     ],
-    main = "dnode_modules_test.py",
+    main = "dson_test.py",
 )
