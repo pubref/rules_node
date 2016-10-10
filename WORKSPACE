@@ -21,11 +21,19 @@ npm_repository(
 )
 
 npm_repository(
-    name = "npm_webpack",
+    name = "npm_mocha",
     deps = {
-        "webpack": "1.13.2",
+        "mocha": "3.1.0",
     },
-    sha256 = "705fac8595a57368185ac25f0a54bac475f4646285b4bc4af650ae754ac56e2b",
+    sha256 = "9b48987065bb42003bab81b4538afa9ac194d217d8e2e770a5cba782249f7dc8",
+)
+
+npm_repository(
+    name = "npm_underscore",
+    deps = {
+        "underscore": "1.8.3",
+    },
+    sha256 = "7c413345ad4f97024258e5d9fda40e26be0f2c2b73987d13f03352b5c489b1a8",
 )
 
 npm_repository(

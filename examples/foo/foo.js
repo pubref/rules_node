@@ -1,7 +1,7 @@
 // stdlib dependency
 var process = require("process");
 // npm_repository module dependency
-var glob = require("glob");
+var react = require("react");
 // local module dependency
 var baz = require("examples-baz");
 // relative file dependency

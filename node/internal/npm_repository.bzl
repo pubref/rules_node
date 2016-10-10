@@ -62,8 +62,7 @@ def _npm_repository_impl(ctx):
         dson_execute(ctx, dson_path = "node_modules")
         dar_execute(ctx, dar_root = "node_modules")
         sha256_execute(ctx, "node_modules.tar")
-    else:
-        print("no sha, skipping determistic steps...")
+
 
     ctx.file("BUILD", BUILD_FILE.format(
         modules_path = modules_path,

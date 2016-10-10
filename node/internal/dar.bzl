@@ -34,5 +34,5 @@ def dar_execute(ctx, dar_root=None):
         "--file", "%s=%s" % (dar_filename, dar_root),
     ]
 
-    print("dar: %s" % cmd)
+    #print("dar: %s" % cmd)
     return execute(ctx, cmd)

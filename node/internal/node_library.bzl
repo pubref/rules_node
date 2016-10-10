@@ -40,6 +40,8 @@ def _copy_to_namespace(base, file):
 def node_library_impl(ctx):
     node = ctx.executable._node
     npm = ctx.executable._npm
+    modules = ctx.attr.modules
+
     lib_name = _get_lib_name(ctx)
     stage_name = lib_name + ".npmfiles"
 
@@ -53,9 +55,7 @@ def node_library_impl(ctx):
     npm_package_json_file = ctx.new_file("lib/node_modules/%s/package.json" % lib_name)
 
     transitive_srcs = []
-
-    modules = ctx.attr.modules
-    transitive_modules = []
+    transitive_node_modules = []
 
     files = []
     for d in ctx.attr.data:
@@ -65,7 +65,7 @@ def node_library_impl(ctx):
     for dep in ctx.attr.deps:
         lib = dep.node_library
         transitive_srcs += lib.transitive_srcs
-        transitive_modules += lib.transitive_modules
+        transitive_node_modules += lib.transitive_node_modules
 
     ctx.template_action(
         template = package_json_template_file,
@@ -125,8 +125,7 @@ def node_library_impl(ctx):
             label = ctx.label,
             srcs = srcs,
             transitive_srcs = srcs + transitive_srcs,
-            modules = modules,
-            transitive_modules = modules + transitive_modules,
+            transitive_node_modules = ctx.files.modules + transitive_node_modules,
             package_json = npm_package_json_file,
             npm_package_json = npm_package_json_file,
         ),

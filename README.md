@@ -32,20 +32,8 @@ node_repositories()
 | [npm_repository](#npm_repository) | Install a set of npm dependencies. |
 | [node_library](#node_library) | Define a local npm module. |
 | [node_binary](#node_binary) | Build or execute a nodejs script. |
+| [mocha_test](#mocha_test) |  Run a mocha test script. |
 
-# Example
-
-```python
-load("@org_pubref_rules_node//node:rules.bzl", "node_binary")
-
-node_binary(
-    name = "foo",
-    main = "foo.js",
-    modules = [
-        "@npm_react_stack//:modules",
-    ],
-)
-```
 
 ## node_repositories
 
@@ -152,7 +140,46 @@ makes this very clean and convenient.
 ## node_binary
 
 Creates an executable script that will run the file named in the
-`main_script` attribute.  Paths to dependent `node_library` and
+`main` attribute.  Paths to dependent `node_library` and
 `@npm_repository//:modules` labels are used to construct a `NODE_PATH`
 environment variable that the `node` executable will use to fulfill
 `require` dependencies.
+
+```python
+load("@org_pubref_rules_node//node:rules.bzl", "node_binary")
+
+node_binary(
+    name = "foo",
+    main = "foo.js",
+    modules = [
+        "@npm_react_stack//:modules",
+    ],
+)
+```
+
+
+## mocha_test
+
+Runs a mocha test identified by the start script given in `main`.
+External modules dependencies can be listed in the `modules`
+attribute, while internal module dependencies are named in the `deps`
+attribute.  Additional arguments to the `mocha` script runner can be
+listed in the `mocha_args` attribute.
+
+```python
+load("@org_pubref_rules_node//node:rules.bzl", "mocha_test")
+
+mocha_test(
+    name = "foo_test",
+    main = "foo_test.js",
+    modules = [
+        "@npm_underscore//:modules",
+    ],
+    deps = [
+        "//examples/baz",
+    ],
+    mocha_args = [
+        "--reporter=dot",
+    ]
+)
+```
