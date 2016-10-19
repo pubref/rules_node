@@ -15,7 +15,7 @@ dependencies.  This will download the nodejs toolchain including
 ```python
 git_repository(
     name = "org_pubref_rules_node",
-    tag = "v0.3.0",
+    tag = "v0.3.1",
     remote = "https://github.com/pubref/rules_node.git",
 )
 
