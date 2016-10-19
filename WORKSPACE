@@ -8,7 +8,7 @@ npm_repository(
     deps = {
         "glob": "7.1.0",
     },
-    sha256 = "0d694720f9d942d334a45230fdf55ff20e4c78bff8adb67fba99d6d62e27df84",
+    #sha256 = "0d694720f9d942d334a45230fdf55ff20e4c78bff8adb67fba99d6d62e27df84",
 )
 
 npm_repository(
