@@ -2,8 +2,8 @@ _js_filetype = FileType([".js"])
 _modules_filetype = FileType(["node_modules"])
 
 BASH_TEMPLATE = """
-#!/usr/bin/env bash
-set -e
+#!/bin/bash
+set -euf -o pipefail
 
 # Resolve to 'this' node instance if other scripts
 # have '/usr/bin/env node' shebangs
