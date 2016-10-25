@@ -1,4 +1,5 @@
 load("//node:internal/node_repositories.bzl", "node_repositories")
+load("//node:internal/node_modules.bzl", "node_modules")
 load("//node:internal/npm_repository.bzl", "npm_repository")
 load("//node:internal/bower_repository.bzl", "bower_repository")
 load("//node:internal/node_binary.bzl", "node_binary")

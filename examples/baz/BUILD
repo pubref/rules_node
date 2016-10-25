@@ -8,5 +8,7 @@ node_library(
     srcs = [
         "qux.js"
     ],
-    modules = ["@npm_glob//:modules"],
+    modules = [
+        "@glob_modules//:modules",
+    ],
 )

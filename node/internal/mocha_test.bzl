@@ -125,7 +125,7 @@ mocha_test = rule(
             cfg = "host",
         ),
         "mocha": attr.label(
-            default = Label("@npm_mocha//:bin/mocha"),
+            default = Label("@npm_mocha//:node_modules/mocha/bin/mocha"),
             allow_files = True,
             single_file = True,
         ),
