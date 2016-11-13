@@ -12,8 +12,10 @@ export PATH={node_bin_path}:$PATH
 # Used by NPM
 export NODE_PATH={node_paths}
 
-# Run it
-"{node_bin}" "{script_path}" $@
+# Run it but wrap all calls to paths in a call to find. The call to find will
+# search recursively through the filesystem to find the appropriate runfiles
+# directory if that is necessary.
+exec $(find . | grep -m 1 "{node_bin}") $(find . | grep -m 1 "{script_path}") $@
 """
 
 
@@ -62,8 +64,8 @@ def node_binary_impl(ctx):
         output = ctx.outputs.executable,
         executable = True,
         content = BASH_TEMPLATE.format(
-            node_bin = node.short_path,
-            script_path = script.short_path,
+            node_bin = node.path,
+            script_path = script.path,
             node_bin_path = node.dirname,
             node_paths = ":".join(node_paths),
         ),
