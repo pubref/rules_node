@@ -80,6 +80,10 @@ you can determine this).  By setting a `sha256`, you can guard against
 the code changing, but you are not guarding against a malicious
 attacker sneaking in bogus code in the first place.
 
+> Note: the `WORKSPACE` for `rules_node` itself is not yet using the
+> sha256 option as there seems to be remaining non-determinism that
+> renders it flaky.
+
 #### What gets removed before determining the sha256?
 
 In order to make npm deterministic it is necessary to:
