@@ -24,6 +24,7 @@ def _node_toolchain_impl(ctx):
     fail("Unsupported operating system: " + os)
 
   ctx.symlink(noderoot, ctx.path(''))
+
   ctx.file("WORKSPACE", "workspace(name = '%s')" % ctx.name)
   ctx.file("BUILD", NODE_TOOLCHAIN_BUILD_FILE)
 
@@ -31,12 +32,12 @@ _node_toolchain = repository_rule(
     _node_toolchain_impl,
     attrs = {
         "_linux": attr.label(
-            default = Label("@nodejs_linux_amd64//:BUILD"),
+            default = Label("@nodejs_linux_amd64//:BUILD.bazel"),
             allow_files = True,
             single_file = True,
         ),
         "_darwin": attr.label(
-            default = Label("@nodejs_darwin_amd64//:BUILD"),
+            default = Label("@nodejs_darwin_amd64//:BUILD.bazel"),
             allow_files = True,
             single_file = True,
         ),
