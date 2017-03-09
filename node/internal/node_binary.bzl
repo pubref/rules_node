@@ -38,6 +38,7 @@ def _get_node_modules_dir_from_sourcefile(file):
 def node_binary_impl(ctx):
     inputs = []
     srcs = []
+    data = depset()
     script = ctx.file.main
     node = ctx.file._node
     node_paths = []
@@ -50,6 +51,7 @@ def node_binary_impl(ctx):
     for dep in ctx.attr.deps:
         lib = dep.node_library
         srcs += lib.transitive_srcs
+        data += lib.transitive_data
         inputs += [lib.package_json, lib.npm_package_json]
         node_paths += [_get_node_modules_dir_from_package_json(lib.package_json)]
         for file in lib.transitive_node_modules:
@@ -70,8 +72,10 @@ def node_binary_impl(ctx):
     )
 
     #print("node_paths %s" % "\n".join(node_paths))
+    for d in ctx.attr.data:
+      data += d.files
 
-    runfiles = [node, script] + inputs + srcs
+    runfiles = [node, script] + inputs + srcs + data.to_list()
 
     return struct(
         runfiles = ctx.runfiles(
