@@ -96,6 +96,7 @@ def mocha_test_impl(ctx):
     return struct(
         runfiles = ctx.runfiles(
             files = runfiles,
+            collect_data = True,
         ),
     )
 
@@ -110,6 +111,7 @@ mocha_test = rule(
         ),
         "data": attr.label_list(
             allow_files = True,
+            cfg = "data",
         ),
         "deps": attr.label_list(
             providers = ["node_library"],
