@@ -1,6 +1,6 @@
 <table><tr>
 <td><img src="https://github.com/pubref/rules_protobuf/blob/master/images/bazel.png" width="120"/></td>
-<td><img src="https://node-os.com/images/nodejs.png" width="120"/></td>
+<td><img src="https://nodejs.org/static/images/logo.svg" width="120"/></td>
 </tr><tr>
 <td>Bazel</td>
 <td>NodeJs</td>
@@ -15,8 +15,8 @@ dependencies.  This will download the nodejs toolchain including
 ```python
 git_repository(
     name = "org_pubref_rules_node",
-    tag = "v0.3.3",
     remote = "https://github.com/pubref/rules_node.git",
+    commit = "{HEAD}",
 )
 
 load("@org_pubref_rules_node//node:rules.bzl", "node_repositories")
