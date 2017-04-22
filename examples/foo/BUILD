@@ -14,6 +14,7 @@ node_binary(
 mocha_test(
     name = "foo_test",
     main = "foo_test.js",
+    size = "small",
     modules = ["@npm_underscore//:modules"],
     deps = [
         "//examples/baz",
