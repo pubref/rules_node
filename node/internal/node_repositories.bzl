@@ -14,6 +14,12 @@ filegroup(
 )
 """
 
+def _mirror_path(ctx, workspace_root, path):
+  src = '/'.join([workspace_root, path])
+  dst = '/'.join([ctx.path('.'), path])
+  ctx.symlink(src, dst)
+
+
 def _node_toolchain_impl(ctx):
   os = ctx.os.name
   if os == 'linux':
@@ -23,7 +29,10 @@ def _node_toolchain_impl(ctx):
   else:
     fail("Unsupported operating system: " + os)
 
-  ctx.symlink(noderoot, ctx.path(''))
+  _mirror_path(ctx, noderoot, "bin")
+  _mirror_path(ctx, noderoot, "include")
+  _mirror_path(ctx, noderoot, "lib")
+  _mirror_path(ctx, noderoot, "share")
 
   ctx.file("WORKSPACE", "workspace(name = '%s')" % ctx.name)
   ctx.file("BUILD", NODE_TOOLCHAIN_BUILD_FILE)
