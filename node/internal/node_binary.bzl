@@ -15,7 +15,7 @@ export NODE_PATH={node_paths}
 # Run it but wrap all calls to paths in a call to find. The call to find will
 # search recursively through the filesystem to find the appropriate runfiles
 # directory if that is necessary.
-exec $(find . | grep -m 1 "{node_bin}") $(find . | grep -m 1 "{script_path}") $@
+cd $(find . | grep -m 1 "{node_bin}" | sed 's|{node_bin}$||') && exec "{node_bin}" "{script_path}" $@
 """
 
 
