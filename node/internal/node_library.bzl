@@ -109,7 +109,7 @@ def node_library_impl(ctx):
 
     ctx.action(
         mnemonic = "NpmInstallLocal",
-        inputs = [node, npm, package_json_file] + srcs,
+        inputs = [node, npm, package_json_file, script] + srcs,
         outputs = [npm_package_json_file],
         command = " && ".join(cmds),
     )
