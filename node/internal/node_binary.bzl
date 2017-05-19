@@ -1,16 +1,14 @@
+load("//node:internal/node_library.bzl", "node_library")
+
 _js_filetype = FileType([".js"])
 _modules_filetype = FileType(["node_modules"])
 
-BASH_TEMPLATE = """
-#!/usr/bin/env bash
+BASH_TEMPLATE = """#!/usr/bin/env bash
 set -e
 
 # Resolve to 'this' node instance if other scripts
 # have '/usr/bin/env node' shebangs
 export PATH={node_bin_path}:$PATH
-
-# Used by NPM
-export NODE_PATH={node_paths}
 
 # Run it but wrap all calls to paths in a call to find. The call to find will
 # search recursively through the filesystem to find the appropriate runfiles
@@ -42,23 +40,13 @@ def node_binary_impl(ctx):
     srcs = []
     script = ctx.file.main
     node = ctx.file._node
-    node_paths = []
-
-    for file in ctx.files.modules:
-        if not file.basename.endswith("node_modules"):
-            fail("npm_dependency should be a path to a node_modules/ directory.")
-        node_paths += [_get_node_modules_dir_from_sourcefile(file)]
 
     for dep in ctx.attr.deps:
         lib = dep.node_library
         srcs += lib.transitive_srcs
-        inputs += [lib.package_json, lib.npm_package_json]
-        node_paths += [_get_node_modules_dir_from_package_json(lib.package_json)]
+        #inputs += [lib.node_module]
         for file in lib.transitive_node_modules:
             inputs.append(file)
-            node_paths += [file.path]
-
-    node_paths = list(set(node_paths))
 
     ctx.file_action(
         output = ctx.outputs.executable,
@@ -67,11 +55,8 @@ def node_binary_impl(ctx):
             node_bin = node.path,
             script_path = script.path,
             node_bin_path = node.dirname,
-            node_paths = ":".join(node_paths),
         ),
     )
-
-    #print("node_paths %s" % "\n".join(node_paths))
 
     runfiles = [node, script] + inputs + srcs
 
@@ -82,7 +67,7 @@ def node_binary_impl(ctx):
         ),
     )
 
-node_binary = rule(
+_node_binary = rule(
     node_binary_impl,
     attrs = {
         "main": attr.label(
@@ -97,9 +82,6 @@ node_binary = rule(
         "deps": attr.label_list(
             providers = ["node_library"],
         ),
-        "modules": attr.label_list(
-            allow_files = _modules_filetype,
-        ),
         "_node": attr.label(
             default = Label("@org_pubref_rules_node_toolchain//:node_tool"),
             single_file = True,
@@ -110,3 +92,18 @@ node_binary = rule(
     },
     executable = True,
 )
+
+
+def node_binary(name, main = "index.js", data = [], deps = [], modules = []):
+    node_library(
+        name = name + '_lib',
+        deps = deps,
+        modules = modules,
+    )
+
+    _node_binary(
+        name = name,
+        main = main,
+        data = data,
+        deps = [name + '_lib'],
+    )

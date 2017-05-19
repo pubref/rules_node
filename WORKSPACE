@@ -1,7 +1,57 @@
 workspace(name = "org_pubref_rules_node")
 
-load("//node:rules.bzl", "node_repositories", "npm_repository", "bower_repository")
+load("//node:rules.bzl", "node_repositories", "npm_repository", "bower_repository", "yarn_repository")
 node_repositories()
+
+new_http_archive(
+    name = "com_github_yarnpkg_yarn",
+    url = "https://yarnpkg.org/latest.tar.gz",
+    sha256 = "6d1afbb0abd01f2b8d1bfd37da0666c670d09fc7cabad61f5db30f41c5c6363c",
+    strip_prefix="dist",
+    build_file_content = """
+exports_files([
+  "bin/yarn",
+  "bin/yarn.js",
+])
+"""
+)
+
+new_http_archive(
+    name = "com_github_yarnpkg_yarn2",
+    url = "https://github.com/yarnpkg/yarn/releases/download/v0.24.2/yarn-v0.24.2.tar.gz",
+    sha256 = "6d1afbb0abd01f2b8d1bfd37da0666c670d09fc7cabad61f5db30f41c5c6363c",
+    strip_prefix="dist",
+    build_file_content = """
+exports_files([
+  "bin/yarn",
+  "bin/yarn.js",
+])
+"""
+)
+
+yarn_repository(
+    name = "yarn_glob",
+    deps = {
+        "glob": "7.1.0",
+    },
+    sha256 = "15b4a5f09609affff1bc4338dd2d53653311f840d33fcf14d8cc47f40384d380",
+)
+
+yarn_repository(
+    name = "yarn_fs_extra",
+    deps = {
+        "fs-extra": "3.0.1",
+    },
+    sha256 = "b7dfb203462c69e61aa37cffed4bcc57051d98530f1ac14b40244e57ff6c480e",
+)
+
+yarn_repository(
+    name = "yarn_webpack",
+    deps = {
+        "webpack": "2.5.1",
+    },
+    sha256 = "6ecbd3972196ae6be9c6432276a6b94013690e061c4e61ba1f05acae620fc0f0",
+)
 
 npm_repository(
     name = "npm_glob",

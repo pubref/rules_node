@@ -1,28 +1,6 @@
 _js_filetype = FileType([".js"])
 _modules_filetype = FileType(["node_modules"])
 
-def _get_node_modules_dir(file, include_node_modules = True):
-    filename = str(file)
-    parts = filename.split("]")
-    prefix = parts[0][len("Artifact:[["):]
-    middle = parts[1]
-    suffix = parts[2].split("/")
-    components = [prefix, middle] + suffix[0:-1]
-    if include_node_modules:
-        components.append("node_modules")
-    d = "/".join(components)
-    return d
-
-
-def _get_lib_name(ctx):
-    name = ctx.label.name
-    parts = ctx.label.package.split("/")
-    if (len(parts) == 0) or (name != parts[-1]):
-        parts.append(name)
-    if ctx.attr.use_prefix:
-        parts.insert(0, ctx.attr.prefix)
-    return "-".join(parts)
-
 
 def _copy_to_namespace(base, file):
     steps = []
@@ -37,22 +15,19 @@ def _copy_to_namespace(base, file):
     return steps
 
 
-def node_library_impl(ctx):
+def node_library_impl2(ctx):
     node = ctx.executable._node
-    npm = ctx.executable._npm
     modules = ctx.attr.modules
 
-    lib_name = _get_lib_name(ctx)
-    stage_name = lib_name + ".npmfiles"
+    staging_dir = "%s/%s.dir" % (ctx.label.package, ctx.label.name)
 
     srcs = ctx.files.srcs
     script = ctx.file.main
     if not script and len(srcs) > 0:
         script = srcs[0]
 
-    package_json_template_file = ctx.file.package_json_template_file
-    package_json_file = ctx.new_file(stage_name + "/package.json")
-    npm_package_json_file = ctx.new_file("lib/node_modules/%s/package.json" % lib_name)
+    package_json_file = ctx.new_file("%s/package.json" % staging_dir)
+    package_manifest_file = ctx.new_file("package.manifest")
 
     transitive_srcs = []
     transitive_node_modules = []
@@ -67,23 +42,16 @@ def node_library_impl(ctx):
         transitive_srcs += lib.transitive_srcs
         transitive_node_modules += lib.transitive_node_modules
 
-    ctx.template_action(
-        template = package_json_template_file,
-        output = package_json_file,
-        substitutions = {
-            "%{name}": lib_name,
-            "%{main}": script.short_path if script else "",
-            "%{version}": ctx.attr.version,
-            "%{description}": ctx.attr.d,
-        },
-    )
-
-    npm_prefix_parts = _get_node_modules_dir(package_json_file, False).split("/")
-    npm_prefix = "/".join(npm_prefix_parts[0:-1])
-    staging_dir = "/".join([npm_prefix, stage_name])
+    # Inputs to prepare the staging directory
+    inputs = []
 
     cmds = []
+    cmds += ["pwd"]
+    cmds += ["mkdir foo"]
     cmds += ["mkdir -p %s" % staging_dir]
+    cmds += ["ls -al ."]
+    cmds += ["find ."]
+    cmds += ["touch %s" % package_manifest_file.short_path]
 
     if script:
         cmds += _copy_to_namespace(staging_dir, script)
@@ -91,43 +59,124 @@ def node_library_impl(ctx):
         cmds += _copy_to_namespace(staging_dir, src)
     for file in files:
         cmds += _copy_to_namespace(staging_dir, file)
+    for filegroup in modules:
+        print("module %r" % filegroup.label.workspace_root)
+        cmds += ["ln -s %s/node_modules/* %s/node_modules" % (filegroup.label.workspace_root, ctx.label.package)]
 
-    install_cmd = [
-        node.path,
-        npm.path,
-        "install",
-        #"--verbose",
-        "--global", # remember you need --global + --prefix
-        "--prefix",
-        npm_prefix,
-    ]
-
-    install_cmd.append(staging_dir)
-    cmds.append(" ".join(install_cmd))
-
-    #print("cmds: \n%s" % "\n".join(cmds))
+    print("cmds: \n%s" % "\n".join(cmds))
 
     ctx.action(
-        mnemonic = "NpmInstallLocal",
-        inputs = [node, npm, package_json_file, script] + srcs,
-        outputs = [npm_package_json_file],
+        mnemonic = "NodeLibraryManifest",
+        inputs = srcs + [script] + files,
+        outputs = [package_manifest_file],
         command = " && ".join(cmds),
     )
 
+
+    package = struct(
+        name = ctx.label.name,
+        main = script.short_path if script else "",
+        version = ctx.attr.version,
+        description = ctx.attr.d,
+    )
+
+    ctx.file_action(package_json_file, package.to_json())
+
     return struct(
-        files = set(srcs),
+        files = set(srcs + [package_manifest_file, package_json_file]),
         runfiles = ctx.runfiles(
             files = srcs,
             collect_default = True,
         ),
         node_library = struct(
-            name = lib_name,
+            name = package.name,
             label = ctx.label,
             srcs = srcs,
             transitive_srcs = srcs + transitive_srcs,
             transitive_node_modules = ctx.files.modules + transitive_node_modules,
-            package_json = npm_package_json_file,
-            npm_package_json = npm_package_json_file,
+            package_json = package_json_file,
+        ),
+    )
+
+
+def node_library_impl(ctx):
+    node = ctx.executable._node
+    modules = ctx.attr.modules
+
+    # What is the goal here?  All you want to do is create a node_module, no?
+    staging_dir = "%s/%s.dir" % (ctx.label.package, ctx.label.name)
+
+    script = ctx.file.main
+
+    package_json_file = ctx.new_file("%s/package.json" % staging_dir)
+    package_manifest_file = ctx.new_file("package.manifest")
+
+    transitive_srcs = []
+    transitive_node_modules = []
+
+    files = []
+    for d in ctx.attr.data:
+        for file in d.files:
+            files.append(file)
+
+    for dep in ctx.attr.deps:
+        lib = dep.node_library
+        transitive_srcs += lib.transitive_srcs
+        transitive_node_modules += lib.transitive_node_modules
+
+    # Inputs to prepare the staging directory
+    inputs = []
+
+    cmds = []
+    cmds += ["pwd"]
+    cmds += ["mkdir foo"]
+    cmds += ["mkdir -p %s" % staging_dir]
+    cmds += ["ls -al ."]
+    cmds += ["find ."]
+    cmds += ["touch %s" % package_manifest_file.short_path]
+
+    srcs = []
+    if script:
+        cmds += _copy_to_namespace(staging_dir, script)
+    for src in srcs:
+        cmds += _copy_to_namespace(staging_dir, src)
+    for file in files:
+        cmds += _copy_to_namespace(staging_dir, file)
+    for filegroup in modules:
+        print("module %r" % filegroup.label.workspace_root)
+        cmds += ["ln -s %s/node_modules/* %s/node_modules" % (filegroup.label.workspace_root, ctx.label.package)]
+
+    print("cmds: \n%s" % "\n".join(cmds))
+
+    ctx.action(
+        mnemonic = "NodeLibraryManifest",
+        inputs = srcs + [script] + files,
+        outputs = [package_manifest_file],
+        command = " && ".join(cmds),
+    )
+
+    package = struct(
+        name = ctx.label.name,
+        main = script.short_path if script else "",
+        version = ctx.attr.version,
+        description = ctx.attr.d,
+    )
+
+    ctx.file_action(package_json_file, package.to_json())
+
+    return struct(
+        files = set(srcs + [package_manifest_file, package_json_file]),
+        runfiles = ctx.runfiles(
+            files = srcs,
+            collect_default = True,
+        ),
+        node_library = struct(
+            name = package.name,
+            label = ctx.label,
+            srcs = srcs,
+            transitive_srcs = srcs + transitive_srcs,
+            transitive_node_modules = ctx.files.modules + transitive_node_modules,
+            package_json = package_json_file,
         ),
     )
 
@@ -167,13 +216,6 @@ node_library = rule(
         "use_prefix": attr.bool(default = False),
         "_node": attr.label(
             default = Label("@org_pubref_rules_node_toolchain//:node_tool"),
-            single_file = True,
-            allow_files = True,
-            executable = True,
-            cfg = "host",
-        ),
-        "_npm": attr.label(
-            default = Label("@org_pubref_rules_node_toolchain//:npm_tool"),
             single_file = True,
             allow_files = True,
             executable = True,
