@@ -55,23 +55,24 @@ _node_toolchain = repository_rule(
     },
 )
 
-def node_repositories():
-
+def node_repositories(version="6.6.0",
+                      linux_sha256="c22ab0dfa9d0b8d9de02ef7c0d860298a5d1bf6cae7413fb18b99e8a3d25648a",
+                      darwin_sha256="c8d1fe38eb794ca46aacf6c8e90676eec7a8aeec83b4b09f57ce503509e7a19f"):
     native.new_http_archive(
         name = "nodejs_linux_amd64",
-        url = "https://nodejs.org/dist/v6.6.0/node-v6.6.0-linux-x64.tar.gz",
+        url = "https://nodejs.org/dist/v{version}/node-v{version}-linux-x64.tar.gz".format(version=version),
         type = "tar.gz",
-        strip_prefix = "node-v6.6.0-linux-x64",
-        sha256 = "c22ab0dfa9d0b8d9de02ef7c0d860298a5d1bf6cae7413fb18b99e8a3d25648a",
+        strip_prefix = "node-v{version}-linux-x64".format(version=version),
+        sha256 = linux_sha256,
         build_file_content = "",
     )
 
     native.new_http_archive(
         name = "nodejs_darwin_amd64",
-        url = "https://nodejs.org/dist/v6.6.0/node-v6.6.0-darwin-x64.tar.gz",
+        url = "https://nodejs.org/dist/v{version}/node-v{version}-darwin-x64.tar.gz".format(version=version),
         type = "tar.gz",
-        strip_prefix = "node-v6.6.0-darwin-x64",
-        sha256 = "c8d1fe38eb794ca46aacf6c8e90676eec7a8aeec83b4b09f57ce503509e7a19f",
+        strip_prefix = "node-v{version}-darwin-x64".format(version=version),
+        sha256 = darwin_sha256,
         build_file_content = "",
     )
 
