@@ -21,7 +21,7 @@ def _get_abs_sourcepath(file):
     filename = str(file)
     #print("filename: %s" % filename)
     parts = filename.partition("[source]]")
-    prefix = parts[0][len("Artifact:["):]
+    prefix = parts[0][len("File:["):]
     suffix = parts[2]
     d = "/".join([prefix, suffix])
     #print("abs filename: %s" % d)
@@ -31,7 +31,7 @@ def _get_abs_sourcepath(file):
 def _get_node_modules_dir_from_binfile(file):
     bin = str(file)
     parts = bin.partition("[source]]")
-    prefix = parts[0][len("Artifact:["):]
+    prefix = parts[0][len("File:["):]
     suffix_parts = parts[2].split("/")
     #print("prefix: %s, suffix_parts: %s" % (prefix, suffix_parts))
     return "/".join([prefix] + suffix_parts[0:2] + ["node_modules"])
@@ -40,7 +40,7 @@ def _get_node_modules_dir_from_binfile(file):
 def _get_node_modules_dir_from_package_json(file):
     filename = str(file)
     parts = filename.split("]")
-    prefix = parts[0][len("Artifact:[["):]
+    prefix = parts[0][len("File:[["):]
     middle = parts[1]
     suffix = parts[2].split("/")
     d = "/".join([prefix, middle] + suffix[0:-3] + ["node_modules"])
