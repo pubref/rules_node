@@ -56,15 +56,23 @@ def node_library_impl(ctx):
 
     transitive_srcs = []
     transitive_node_modules = []
+    transitive_data = depset()
 
     files = []
     for d in ctx.attr.data:
+        transitive_data += d.files
         for file in d.files:
             files.append(file)
+    
+    for b in ctx.attr.closure_binaries:
+        transitive_data += d.files
+        transitive_data += d.transitive_js_srcs
+        files += d.transitive_js_srcs
 
     for dep in ctx.attr.deps:
         lib = dep.node_library
         transitive_srcs += lib.transitive_srcs
+        transitive_data += lib.transitive_data
         transitive_node_modules += lib.transitive_node_modules
 
     ctx.template_action(
@@ -125,6 +133,7 @@ def node_library_impl(ctx):
             label = ctx.label,
             srcs = srcs,
             transitive_srcs = srcs + transitive_srcs,
+            transitive_data = transitive_data,
             transitive_node_modules = ctx.files.modules + transitive_node_modules,
             package_json = npm_package_json_file,
             npm_package_json = npm_package_json_file,
@@ -147,6 +156,9 @@ node_library = rule(
         ),
         "d": attr.string(
             default = "No description provided.",
+        ),
+        "closure_binaries": attr.label_list(
+            allow_files = True,
         ),
         "data": attr.label_list(
             allow_files = True,
