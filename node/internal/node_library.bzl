@@ -147,6 +147,9 @@ def node_library_impl(ctx):
         cmds += ["ln -s %s/node_modules/* %s/node_modules" % (filegroup.label.workspace_root, ctx.label.package)]
 
     print("cmds: \n%s" % "\n".join(cmds))
+    print("srcs: %r" % srcs)
+    print("script: %r" % script)
+    print("files: %r" % files)
 
     ctx.action(
         mnemonic = "NodeLibraryManifest",

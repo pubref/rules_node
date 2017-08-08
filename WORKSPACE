@@ -1,33 +1,7 @@
 workspace(name = "org_pubref_rules_node")
 
-load("//node:rules.bzl", "node_repositories", "npm_repository", "bower_repository", "yarn_repository")
+load("//node:rules.bzl", "node_repositories", "npm_repository", "bower_repository", "yarn_repository", "node_modules")
 node_repositories()
-
-new_http_archive(
-    name = "com_github_yarnpkg_yarn",
-    url = "https://yarnpkg.org/latest.tar.gz",
-    sha256 = "6d1afbb0abd01f2b8d1bfd37da0666c670d09fc7cabad61f5db30f41c5c6363c",
-    strip_prefix="dist",
-    build_file_content = """
-exports_files([
-  "bin/yarn",
-  "bin/yarn.js",
-])
-"""
-)
-
-new_http_archive(
-    name = "com_github_yarnpkg_yarn2",
-    url = "https://github.com/yarnpkg/yarn/releases/download/v0.24.2/yarn-v0.24.2.tar.gz",
-    sha256 = "6d1afbb0abd01f2b8d1bfd37da0666c670d09fc7cabad61f5db30f41c5c6363c",
-    strip_prefix="dist",
-    build_file_content = """
-exports_files([
-  "bin/yarn",
-  "bin/yarn.js",
-])
-"""
-)
 
 yarn_repository(
     name = "yarn_glob",
@@ -38,19 +12,20 @@ yarn_repository(
 )
 
 yarn_repository(
-    name = "yarn_fs_extra",
+    name = "yarn_fs_utils",
     deps = {
         "fs-extra": "3.0.1",
+        "klaw": "1.3.1",
     },
-    sha256 = "b7dfb203462c69e61aa37cffed4bcc57051d98530f1ac14b40244e57ff6c480e",
+    sha256 = "73bd930fcca8dac440281d300c6322b4e1507009bb32340fe2a4eb1511cb2b35",
 )
 
 yarn_repository(
     name = "yarn_webpack",
     deps = {
-        "webpack": "2.5.1",
+        "webpack": "2.6.1",
     },
-    sha256 = "6ecbd3972196ae6be9c6432276a6b94013690e061c4e61ba1f05acae620fc0f0",
+    sha256 = "9479b8089d27438396ed88acb8aa00443ec17d7e574a599a7338ad2acaa67a16",
 )
 
 npm_repository(
@@ -59,6 +34,11 @@ npm_repository(
         "glob": "7.1.0",
     },
     #sha256 = "0d694720f9d942d334a45230fdf55ff20e4c78bff8adb67fba99d6d62e27df84",
+)
+
+node_modules(
+    name = "node_fs_utils",
+    package_json = "//example/ex1:package.json",
 )
 
 npm_repository(
