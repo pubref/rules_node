@@ -1,7 +1,32 @@
 workspace(name = "org_pubref_rules_node")
 
-load("//node:rules.bzl", "node_repositories", "npm_repository", "bower_repository")
+load("//node:rules.bzl", "node_repositories", "npm_repository", "bower_repository", "yarn_repository", "node_modules")
 node_repositories()
+
+yarn_repository(
+    name = "yarn_glob",
+    deps = {
+        "glob": "7.1.0",
+    },
+    sha256 = "15b4a5f09609affff1bc4338dd2d53653311f840d33fcf14d8cc47f40384d380",
+)
+
+yarn_repository(
+    name = "yarn_fs_utils",
+    deps = {
+        "fs-extra": "3.0.1",
+        "klaw": "1.3.1",
+    },
+    sha256 = "73bd930fcca8dac440281d300c6322b4e1507009bb32340fe2a4eb1511cb2b35",
+)
+
+yarn_repository(
+    name = "yarn_webpack",
+    deps = {
+        "webpack": "2.6.1",
+    },
+    sha256 = "9479b8089d27438396ed88acb8aa00443ec17d7e574a599a7338ad2acaa67a16",
+)
 
 npm_repository(
     name = "npm_glob",
@@ -9,6 +34,11 @@ npm_repository(
         "glob": "7.1.0",
     },
     #sha256 = "0d694720f9d942d334a45230fdf55ff20e4c78bff8adb67fba99d6d62e27df84",
+)
+
+node_modules(
+    name = "node_fs_utils",
+    package_json = "//example/ex1:package.json",
 )
 
 npm_repository(

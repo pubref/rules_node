@@ -1,5 +1,5 @@
 <table><tr>
-<td><img src="https://github.com/pubref/rules_protobuf/blob/master/images/bazel.png" width="120"/></td>
+<td><img src="https://bazel.build/images/bazel-icon.svg" width="120"/></td>
 <td><img src="https://nodejs.org/static/images/logo.svg" width="120"/></td>
 </tr><tr>
 <td>Bazel</td>
@@ -185,5 +185,17 @@ mocha_test(
     mocha_args = [
         "--reporter=dot",
     ]
+)
+```
+
+> Note: to use the mocha_test rules, you'll need to add npm_mocha as a
+> dependency in your `WORKSPACE` file:
+
+```
+npm_repository(
+    name = "npm_mocha",
+    deps = {
+        "mocha": "3.5.0", # update as needed
+    },
 )
 ```
