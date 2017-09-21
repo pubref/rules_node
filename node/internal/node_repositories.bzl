@@ -1,81 +1,129 @@
-NODE_TOOLCHAIN_BUILD_FILE = """
-package(default_visibility = [ "//visibility:public" ])
-exports_files([
-  "bin/node",
-  "bin/npm",
-])
-filegroup(
-  name = "node_tool",
-  srcs = [ "bin/node" ],
-)
-filegroup(
-  name = "npm_tool",
-  srcs = [ "bin/npm" ],
-)
+# The node_repository_impl taken from Alex Eagle's rules_nodejs :)
+#
+# Copyright 2017 The Bazel Authors. All rights reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#    http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+"""Install NodeJS when the user runs node_repositories() from their WORKSPACE.
+
+We fetch a specific version of Node, to ensure builds are hermetic.
+We then create a repository @nodejs which provides the
+node binary to other rules.
 """
 
-def _mirror_path(ctx, workspace_root, path):
-  src = '/'.join([workspace_root, path])
-  dst = '/'.join([ctx.path('.'), path])
-  ctx.symlink(src, dst)
+YARN_BUILD_FILE_CONTENT = """
+package(default_visibility = [ "//visibility:public" ])
+exports_files([
+  "bin/yarn",
+  "bin/yarn.js",
+])
+"""
+
+YARN_LOCKFILE_BUILD_FILE_CONTENT = """
+package(default_visibility = [ "//visibility:public" ])
+exports_files([
+  "index.js",
+])
+"""
+
+NODE_BUILD_FILE_CONTENT = """
+package(default_visibility = ["//visibility:public"])
+exports_files([
+  "{0}",
+  "{1}",
+])
+alias(name = "node", actual = "{0}")
+alias(name = "npm", actual = "{1}")
+"""
 
 
-def _node_toolchain_impl(ctx):
-  os = ctx.os.name
-  if os == 'linux':
-    noderoot = ctx.path(ctx.attr._linux).dirname
-  elif os == 'mac os x':
-    noderoot = ctx.path(ctx.attr._darwin).dirname
-  else:
-    fail("Unsupported operating system: " + os)
+def _node_repository_impl(repository_ctx):
+  version = repository_ctx.attr.node_version
+  sha256 = repository_ctx.attr.linux_sha256
+  arch = "linux-x64"
+  node = "bin/node"
+  npm = "bin/npm"
+  compression_format = "tar.xz"
 
-  _mirror_path(ctx, noderoot, "bin")
-  _mirror_path(ctx, noderoot, "include")
-  _mirror_path(ctx, noderoot, "lib")
-  _mirror_path(ctx, noderoot, "share")
+  os_name = repository_ctx.os.name.lower()
+  if os_name.startswith("mac os"):
+    arch = "darwin-x64"
+    sha256 = repository_ctx.attr.darwin_sha256
+  elif os_name.find("windows") != -1:
+    arch = "win-x64"
+    node = "node.exe"
+    npm = "npm.cmd"
+    compression_format = "zip"
+    sha256 = repository_ctx.attr.windows_sha256
 
-  ctx.file("WORKSPACE", "workspace(name = '%s')" % ctx.name)
-  ctx.file("BUILD", NODE_TOOLCHAIN_BUILD_FILE)
-  ctx.file("BUILD.bazel", NODE_TOOLCHAIN_BUILD_FILE)
+  prefix = "node-v%s-%s" % (version, arch)
+  url = "https://nodejs.org/dist/v{version}/{prefix}.{compression_format}".format(
+    version = version,
+    prefix = prefix,
+    compression_format = compression_format,
+  )
+
+  repository_ctx.download_and_extract(
+    url = url,
+    stripPrefix = prefix,
+    sha256 = sha256,
+  )
+
+  repository_ctx.file("BUILD.bazel", content = NODE_BUILD_FILE_CONTENT.format(node, npm))
 
 
-_node_toolchain = repository_rule(
-    _node_toolchain_impl,
-    attrs = {
-        "_linux": attr.label(
-            default = Label("@nodejs_linux_amd64//:WORKSPACE"),
-            allow_files = True,
-            single_file = True,
-        ),
-        "_darwin": attr.label(
-            default = Label("@nodejs_darwin_amd64//:WORKSPACE"),
-            allow_files = True,
-            single_file = True,
-        ),
-    },
+_node_repository = repository_rule(
+  _node_repository_impl,
+  attrs = {
+    "node_version": attr.string(
+      default = "7.10.1",
+    ),
+    "linux_sha256": attr.string(
+      default = "7b0e9d1af945671a0365a64ee58a2b0d72b3632a1cebe6b5bd75094b93627bf3",
+    ),
+    "darwin_sha256": attr.string(
+      default = "d67d2eb9456aab925416ad58aa18b9680e66a4bcc243a89b22e646f7fffc4ff9",
+    ),
+    "windows_sha256": attr.string(
+      default = "a03512d8f17d8312c6fece68a9c20aaa8e2268de18edfea847aa6a35af3a95ba",
+    ),
+  },
 )
 
-def node_repositories(version="6.6.0",
-                      linux_sha256="c22ab0dfa9d0b8d9de02ef7c0d860298a5d1bf6cae7413fb18b99e8a3d25648a",
-                      darwin_sha256="c8d1fe38eb794ca46aacf6c8e90676eec7a8aeec83b4b09f57ce503509e7a19f"):
+
+def node_repositories(yarn_version="v1.0.1",
+                      yarn_sha256="6b00b5e0a7074a512d39d2d91ba6262dde911d452617939ca4be4a700dd77cf1",
+                      **kwargs):
+
     native.new_http_archive(
-        name = "nodejs_linux_amd64",
-        url = "https://nodejs.org/dist/v{version}/node-v{version}-linux-x64.tar.gz".format(version=version),
-        type = "tar.gz",
-        strip_prefix = "node-v{version}-linux-x64".format(version=version),
-        sha256 = linux_sha256,
-        build_file_content = "",
+      name = "yarn",
+      url = "https://github.com/yarnpkg/yarn/releases/download/{yarn_version}/yarn-{yarn_version}.tar.gz".format(
+        yarn_version = yarn_version,
+      ),
+      sha256 = yarn_sha256,
+      strip_prefix="yarn-%s" % yarn_version,
+      build_file_content = YARN_BUILD_FILE_CONTENT,
     )
 
     native.new_http_archive(
-        name = "nodejs_darwin_amd64",
-        url = "https://nodejs.org/dist/v{version}/node-v{version}-darwin-x64.tar.gz".format(version=version),
-        type = "tar.gz",
-        strip_prefix = "node-v{version}-darwin-x64".format(version=version),
-        sha256 = darwin_sha256,
-        build_file_content = "",
+      name = "yarnpkg_lockfile",
+      url = "https://registry.yarnpkg.com/@yarnpkg/lockfile/-/lockfile-1.0.0.tgz",
+      sha256 = "472add7ad141c75811f93dca421e2b7456045504afacec814b0565f092156250",
+      strip_prefix="package",
+      build_file_content =  YARN_LOCKFILE_BUILD_FILE_CONTENT,
     )
 
-    _node_toolchain(
-        name = "org_pubref_rules_node_toolchain",
+    _node_repository(
+      name = "node",
+      **kwargs
     )
