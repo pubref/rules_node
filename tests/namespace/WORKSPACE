@@ -1,0 +1,8 @@
+local_repository(
+    name = "org_pubref_rules_node",
+    path = "../..",
+)
+
+load("@org_pubref_rules_node//node:rules.bzl", "node_repositories")
+
+node_repositories()

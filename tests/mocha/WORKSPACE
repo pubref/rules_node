@@ -1,0 +1,15 @@
+local_repository(
+    name = "org_pubref_rules_node",
+    path = "../..",
+)
+
+load("@org_pubref_rules_node//node:rules.bzl", "node_repositories", "yarn_modules")
+
+node_repositories()
+
+yarn_modules(
+    name = "mocha_modules",
+    deps = {
+        "mocha": "3.5.3",
+    }
+)

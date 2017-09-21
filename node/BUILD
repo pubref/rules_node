@@ -1,5 +1,5 @@
 package(default_visibility = ["//visibility:public"])
 
 exports_files([
-    "package.json.tpl",
+    "internal/node_launcher.sh",
 ])
