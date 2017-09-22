@@ -1,4 +1,4 @@
-load("@bazel_tools//tools/build_defs/pkg:pkg.bzl", "pkg_tar", "pkg_deb")
+load("@bazel_tools//tools/build_defs/pkg:pkg.bzl", "pkg_tar")
 load("//node:internal/node_module.bzl", "node_module")
 
 _node_filetype = FileType(['.js', '.node'])

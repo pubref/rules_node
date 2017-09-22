@@ -1,5 +1,8 @@
-load("//node:internal/sha256.bzl", "sha256_attrs", "sha256_execute")
-load("//node:internal/node_utils.bzl", "execute")
+def execute(ctx, cmds, **kwargs):
+    result = ctx.execute(cmds, **kwargs)
+    if result.return_code:
+        fail(" ".join(cmds) + "failed: \nSTDOUT:\n%s\nSTDERR:\n%s" % (result.stdout, result.stderr))
+    return result
 
 def _create_package_json_content(ctx):
     content = {

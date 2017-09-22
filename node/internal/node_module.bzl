@@ -1,5 +1,3 @@
-# https://nodejs.org/api/modules.html#modules_folders_as_modules
-
 _node_filetype = FileType([".js", ".node"])
 
 def _relname(ctx, root_file, file):
