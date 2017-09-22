@@ -28,7 +28,7 @@ def _copy_module(ctx, output_dir, module):
         dst_filename = _get_filename_relative_to_module(module, src)
         dst = ctx.new_file('%s/node_modules/%s' % (output_dir, dst_filename))
         outputs.append(dst)
-        script_lines.append('cp %s %s' % (src.path, dst.path))
+        script_lines.append("cp '%s' '%s'" % (src.path, dst.path))
 
     ctx.file_action(
         output = script_file,

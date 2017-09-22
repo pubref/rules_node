@@ -108,7 +108,7 @@ def _copy_file(ctx, src, dst):
         mnemonic = "CopyFileToNodeModule",
         inputs = [src],
         outputs = [dst],
-        command = "cp %s %s" % (src.path, dst.path),
+        command = "cp '%s' '%s'" % (src.path, dst.path),
     )
     return dst
 
