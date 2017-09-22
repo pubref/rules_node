@@ -21,7 +21,7 @@ entries.forEach(entry => printNodeModule(entry));
 
 printNodeModules(cache);
 
-entries.forEach(entry => parsePackageJson(entry));
+cache.forEach(entry => parsePackageJson(entry));
 
 print("");
 print("# EOF");
