@@ -95,7 +95,7 @@ _node_repository = repository_rule(
       default = "d67d2eb9456aab925416ad58aa18b9680e66a4bcc243a89b22e646f7fffc4ff9",
     ),
     "windows_sha256": attr.string(
-      default = "a03512d8f17d8312c6fece68a9c20aaa8e2268de18edfea847aa6a35af3a95ba",
+      default = "617590f06f9a0266ceecb3fd17120fc2fbf8669980974f339a83f3b56ed05f7b",
     ),
   },
 )

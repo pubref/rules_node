@@ -20,6 +20,11 @@
 | [node_binary](#node_binary) | Build a node_modules tree and execute an entrypoint module script. |
 | [mocha_test](#mocha_test) |  Run a mocha test script. |
 
+<table><tr>
+<td><img src="https://www.kernel.org/theme/images/logos/tux.png" height="48"/></td>
+<td><img src="https://upload.wikimedia.org/wikipedia/commons/f/fa/Apple_logo_black.svg" height="48"/></td>
+<td><img src="https://upload.wikimedia.org/wikipedia/commons/5/5f/Windows_logo_-_2012.svg" height="48"/></td>
+</tr></table>
 
 ## node_repositories
 
