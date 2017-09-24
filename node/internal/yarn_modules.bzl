@@ -36,7 +36,11 @@ def _yarn_modules_impl(ctx):
         fail("You must specify a package.json file OR deps (not both!)")
 
     # Gather required resources
-    node = ctx.path(ctx.attr._node)
+    node_label = ctx.attr._node
+    if ctx.os.name.lower().find("windows") != -1:
+        node_label = ctx.attr._node_exe
+    node = ctx.path(node_label)
+
     parse_yarn_lock_js = ctx.path(ctx.attr._parse_yarn_lock_js)
     yarn_js = ctx.path(ctx.attr._yarn_js)
 
@@ -74,6 +78,13 @@ yarn_modules = repository_rule(
         "_node": attr.label(
             # FIXME(pcj): This is going to invalid for windows
             default = Label("@node//:bin/node"),
+            single_file = True,
+            allow_files = True,
+            executable = True,
+            cfg = "host",
+        ),
+        "_node_exe": attr.label(
+            default = Label("@node//:node.exe"),
             single_file = True,
             allow_files = True,
             executable = True,

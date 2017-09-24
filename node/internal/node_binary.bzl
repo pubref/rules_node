@@ -67,7 +67,7 @@ def _create_launcher(ctx, output_dir, node):
         'cd $ROOT/%s' % output_dir,
         '&&',
         'exec',
-        'node',
+        ctx.executable._node.basename,
     ] + ctx.attr.node_args + [
         entrypoint,
     ] + ctx.attr.script_args + [
@@ -75,7 +75,7 @@ def _create_launcher(ctx, output_dir, node):
     ]
 
     lines = [
-        '#!/usr/bin/env bash',
+        '#!/usr/bin/env bash', # TODO(user): fix for windows
         'set -e',
 
         # Set the execution root to the same directory where the
@@ -87,6 +87,7 @@ def _create_launcher(ctx, output_dir, node):
 
         # Resolve to this node instance if other scripts have
         # '/usr/bin/env node' shebangs
+        # TODO: fix for windows
         'export PATH="$ROOT:$PATH"',
 
         ' '.join(cmd)
@@ -120,7 +121,7 @@ def node_binary_impl(ctx):
         content = manifest_content.to_json(),
     )
 
-    node = ctx.new_file('%s/node' % output_dir)
+    node = ctx.new_file('%s/%s' % (output_dir, ctx.executable._node.basename))
     ctx.action(
         mnemonic = 'CopyNode',
         inputs = [ctx.executable._node],
