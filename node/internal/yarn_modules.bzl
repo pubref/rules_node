@@ -4,6 +4,7 @@ def execute(ctx, cmds, **kwargs):
         fail(" ".join(cmds) + "failed: \nSTDOUT:\n%s\nSTDERR:\n%s" % (result.stdout, result.stderr))
     return result
 
+
 def _create_package_json_content(ctx):
     content = {
         "name": ctx.name,
@@ -14,17 +15,6 @@ def _create_package_json_content(ctx):
         dependencies[name] = version
     content["dependencies"] = struct(**dependencies)
     return struct(**content)
-
-
-def _download_and_extract_module(ctx, entry):
-    name = entry["name"]
-    url = entry["url"]
-    print("downloading %s to node_modules/%s, stripping '%s'" % (url, name, 'package'))
-    ctx.download_and_extract(
-        url,
-        output = "node_modules/" + name,
-        stripPrefix = "package",
-    )
 
 
 def _yarn_modules_impl(ctx):
@@ -44,6 +34,15 @@ def _yarn_modules_impl(ctx):
     parse_yarn_lock_js = ctx.path(ctx.attr._parse_yarn_lock_js)
     yarn_js = ctx.path(ctx.attr._yarn_js)
 
+
+    # Grab the @yarnpkg/lockfile dependency
+    ctx.download_and_extract(
+        url = "https://registry.yarnpkg.com/@yarnpkg/lockfile/-/lockfile-1.0.0.tgz",
+        output = "internal/node_modules/@yarnpkg/lockfile",
+        sha256 = "472add7ad141c75811f93dca421e2b7456045504afacec814b0565f092156250",
+        stripPrefix = "package",
+    )
+    
     # Copy over or create the package.json file
     if ctx.attr.package_json:
         package_json_file = ctx.path(ctx.attr.package_json)
@@ -51,28 +50,20 @@ def _yarn_modules_impl(ctx):
     else:
         ctx.file("package.json", _create_package_json_content(ctx).to_json())
 
+        
     # Copy the parse_yarn_lock script and yarn.js over here.
-    execute(ctx, ["cp", parse_yarn_lock_js, "parse_yarn_lock.js"])
+    execute(ctx, ["cp", parse_yarn_lock_js, "internal/parse_yarn_lock.js"])
     execute(ctx, ["cp", yarn_js, "yarn.js"])
 
     # Build node_modules via 'yarn install'
     execute(ctx, [node, yarn_js, "install"], quiet = True, environment = {
         # postinstall scripts may need to find the node binary
-        "PATH": "$PATH:%s" % ctx.path(node).dirname,
+        "PATH": "%s:$PATH" % ctx.path(node).dirname,
     })
-
-    # Build a node_modules with this single dependency
-    ctx.download_and_extract(
-        url = "https://registry.yarnpkg.com/@yarnpkg/lockfile/-/lockfile-1.0.0.tgz",
-        output = "node_modules/@yarnpkg/lockfile",
-        sha256 = "472add7ad141c75811f93dca421e2b7456045504afacec814b0565f092156250",
-        stripPrefix = "package",
-    )
 
     # Run the script and save the stdout to our BUILD file(s)
     parse_args = ["--resolve=%s:%s" % (k, v) for k, v in ctx.attr.resolutions.items()]
-    result = execute(ctx, [node, "parse_yarn_lock.js"] + parse_args, quiet = False)
-    ctx.file("BUILD", result.stdout)
+    result = execute(ctx, [node, "internal/parse_yarn_lock.js"] + parse_args, quiet = True)
     ctx.file("BUILD.bazel", result.stdout)
 
 

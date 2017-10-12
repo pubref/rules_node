@@ -1,149 +1,120 @@
 'use strict';
 
-// Resolution map
-const resolutions = new Map();
-
-// Process Arguments
-process.argv.forEach(arg => {
-  if (arg.indexOf('--resolve') === 0) {
-    let key, val;
-    let tokens = arg.split("=");
-    if (tokens.length === 2) {
-      tokens = tokens[1].trim().split(':');
-      if (tokens.length === 2) {
-        key = tokens[0];
-        val = tokens[1];
-      }
-    }
-    if (key && val) {
-      resolutions.set(key, val);
-      //console.log(`--resolve=${key}:${val}`);
-    } else {
-      throw new Error("Malformed argument.  Should be something like --resolve=minimist:1.2.0");
-    }
-  }
-});
-
-
 const fs = require('fs');
 const lockfile = require('@yarnpkg/lockfile');
+const path = require('path')
 
-let file = fs.readFileSync('yarn.lock', 'utf8');
-let json = lockfile.parse(file);
+main();
 
-if (json.type !== 'success') {
-  throw new Error('Lockfile parse failed: ' + JSON.stringify(json, null, 2));
-}
+/**
+ * Main entrypoint.  Write to stdout that will be captured into a
+ * BUILD file.
+ */
+function main() {
+  // Read the yarn.lock file and parse it.
+  //
+  let file = fs.readFileSync('yarn.lock', 'utf8');
+  let yarn = lockfile.parse(file);
 
-const entries = Object.keys(json.object).map(key => makeEntry(key, json.object[key]));
-
-const conflicts = new Map();
-const masters = deduplicateEntries(entries, conflicts, resolutions);
-if (conflicts.size > 0) {
-  const lines = [];
-  lines.push("Module conflicts detected");
-  for (const [name, list] of conflicts.entries()) {
-    lines.push(`${name}: ${list.map(e => e.version).join(", ")}`)
+  if (yarn.type !== 'success') {
+    throw new Error('Lockfile parse failed: ' + JSON.stringify(yarn, null, 2));
   }
-  throw new Error(lines.join("\n"));
-}
 
-masters.forEach(entry => parsePackageJson(entry));
+  // Foreach entry in the lockfile, create an entry object.  We'll
+  // supplement merge this with information from the package.json file
+  // in a moment...
+  //
+  const entries = Object.keys(yarn.object).map(key => makeYarnEntry(key, yarn.object[key]));
 
-breakCircularDependencies(masters);
+  // For all top-level folders in the node_modules directory that
+  // contain a package.json file...
+  const getModulesIn = p => fs.readdirSync(p)
+        .filter(f =>
+                fs.statSync(path.join(p, f)).isDirectory() &&
+                fs.existsSync(path.join(p, f, 'package.json')) &&
+                fs.statSync(path.join(p, f, 'package.json')).isFile());
 
-print("");
-print("package(default_visibility = ['//visibility:public'])");
-print("load('@org_pubref_rules_node//node:rules.bzl', 'node_module', 'node_binary')");
+  // ... parse ithem 
+  const modules = getModulesIn('node_modules').map(dir => parseNodeModulePackageJson(dir));
 
-const cache = new Map();
-//entries.forEach(entry => printNodeModule(entry));
-masters.forEach(entry => printNodeModule(entry));
+  // Iterate all the modules and merge the information from yarn into
+  // the module
+  modules.forEach(module => mergePackageJsonWithYarnEntry(entries, module));
 
-printNodeModuleAll(masters);
+  // Didn't realize that the nodejs module ecosystem can contain
+  // circular references, but apparently it can.
+  breakCircularDependencies(modules)
 
-printNodeWrapperGenrule();
+  // Print final output
+  //
+  print("");
+  print("package(default_visibility = ['//visibility:public'])");
+  print("load('@org_pubref_rules_node//node:rules.bzl', 'node_module', 'node_binary')");
 
-// Create an executable rule all executable entryies in the modules
-masters.forEach(entry => {
-  if (entry.bin) {
-    Object.keys(entry.bin).forEach(key => printNodeBinary(entry, key, entry.bin[key]));
-  }
-});
+  modules.forEach(module => printNodeModule(module));
 
-print("");
-print("# EOF");
+  printNodeModuleAll(modules);
 
-
-
-function deduplicateEntries(entries, conflicts, resolutions) {
-  const masters = new Map();
-  // Mapping of entry name (string) to entry[] list
-  const versions = new Map();
-  entries.forEach(entry => {
-    let list = versions.get(entry.name);
-    if (!list) {
-      list = [];
-      versions.set(entry.name, list);
-      list.push(entry);
-    } else {
-      // Get multiple resolved duplicate versions. Ignore this entry if
-      // already represented in the set.
-      let unique = false;
-      list.forEach(item => {
-        if (item.version !== entry.version) {
-          unique = true;
-        }
-      });
-      if (unique) {
-        list.push(entry);
+  // Create an executable rule all executable entryies in the modules
+  modules.forEach(module => {
+    if (module.executables) {
+      for (const [name, path] of module.executables.entries()) {
+        printNodeBinary(module, name, path);
       }
     }
   });
-  for (const name of versions.keys()) {
-    const list = versions.get(name);
-    if (list.length > 1) {
-      let resolved = undefined;
-      const preferredVersion = resolutions.get(name);
-      if (preferredVersion) {
-        list.forEach(item => {
-          if (item.version === preferredVersion) {
-            resolved = item;
-          }
-        });
-      }
-      if (resolved) {
-        masters.set(name, resolved);        
-      } else {
-        conflicts.set(name, list)
-      }
-    } else {
-      masters.set(name, list[0]);
+
+  print("");
+  print("# EOF");
+}
+
+
+/**
+ * Given a list of yarn entries and a target module, find an exact
+ * match by name and version.
+ */
+function findMatchingYarnEntryByNameAndVersion(entries, module) {
+  for (let i = 0; i < entries.length; i++) {
+    const entry = entries[i];
+    if (entry.name === module.name && entry.version === module.version) {
+      return entry;
     }
   }
-  return masters;
 }
 
-function deduplicateEntries2(entries) {
-  const masters = new Map();
-  entries.forEach(entry => {
-    const master = masters.get(entry.name);
-    if (master) {
-      // Put a reference to the unique sentinel module on the entry.
-      // If an entry has a non-null master entry, it is a duplicate.
-      entry.master = master;
-    } else {
-      masters.set(entry.name, entry);
-    }
-  });
-  return masters;
+
+/**
+ * Given a list of yarn entries and a target module, merge them.
+ * Actually, this is pretty simple as the yarn entry is simply
+ * attached to the module.
+ */
+function mergePackageJsonWithYarnEntry(entries, module) {
+  const entry = findMatchingYarnEntryByNameAndVersion(entries, module);
+  if (!entry) {
+    throw new Error("No matching node_module found for " + module.name);
+  }
+
+  // Use the bazelified name as the module name
+  module.original_name = module.name
+  module.name = entry.name
+  // Store everything else here
+  module.yarn = entry;
 }
 
-    
-function breakCircularDependencies(masters) {
+/**
+ * Given a list of modules, build a graph of their dependencies and
+ * collapse it according to Tarjan's SCC algorithm.  For any strongly
+ * connected components, break out the cluster into it's own module
+ * and rewrite the dependency graph to point to the cluster rather
+ * than the individual module entries.
+ */
+function breakCircularDependencies(modules) {
 
+  const byName = new Map();
+  modules.forEach(module => byName.set(module.name, module));
+  
   // Make a list of nodes 
-  const nodes = Array.from(masters.keys());
+  const nodes = Array.from(byName.keys());
   // An Array<Array<number>> array for the edges
   const edges = [];
   // And a mapping for backreferences mapped by name
@@ -153,7 +124,7 @@ function breakCircularDependencies(masters) {
   nodes.forEach((node, index) => {
     const list = [];
     edges[index] = list;
-    const entry = masters.get(node);
+    const entry = byName.get(node);
     // Make a set of deps rather than using the entry.dependencies
     // mapping.
     entry.deps = new Set();
@@ -163,7 +134,7 @@ function breakCircularDependencies(masters) {
       Object.keys(entry.dependencies).forEach(name => {
 
         // Save this in the deps set
-        const dependency = masters.get(name);
+        const dependency = byName.get(name);
         entry.deps.add(dependency);
         
         // Populate the adjacency list
@@ -208,7 +179,7 @@ function breakCircularDependencies(masters) {
       const list = [];
       // Last entry in the component can be standalone
       for (let i = 0; i < component.length; i++) {
-        list.push( masters.get(nodes[component[i]]) );
+        list.push(byName.get(nodes[component[i]]) );
       }
 
       // A description for the module
@@ -236,21 +207,28 @@ function breakCircularDependencies(masters) {
         entry.deps = new Set();
       });
 
-      // Store this new pseudo-module in the master list
-      masters.set(pseudo.name, pseudo);      
+      // Store this new pseudo-module in the modules list
+      modules.push(pseudo);
     }
     
   });
 
-  return masters;
 }
 
-function makeEntry(key, entry) {
+/**
+ * Given an entry from lockfile.parse, do additional processing to
+ * assign the name and version.
+ */  
+function makeYarnEntry(key, entry) {
   parseName(key, entry);
   parseResolved(entry);
   return entry;
 }
 
+
+/**
+ * Parse a yarn name into something that will be agreeable to bazel.
+ */
 function parseName(key, entry) {
   // can be 'foo@1.0.0' or something like '@types/foo@1.0.0'
   const at = key.lastIndexOf('@');
@@ -261,6 +239,10 @@ function parseName(key, entry) {
   entry.label = label;
 }
 
+  
+/**
+ * Parse the yarn 'resolved' entry into its component url and sha1.
+ */
 function parseResolved(entry) {
   const resolved = entry.resolved;
   if (resolved) {
@@ -270,154 +252,143 @@ function parseResolved(entry) {
   }
 }
 
-function printDownloadMeta(entry) {
-  print("# <-- " + [entry.sha1,entry.name,entry.url].join("|"));
-}
-
+  
+/**
+ * Reformat/pretty-print a json object as a skylark comment (each line
+ * starts with '# ').
+ */
 function printJson(entry) {
-  delete entry.deps;
-  delete entry.master;
-  delete entry.referrer;
+  // Hacky workaround to avoic circular issues when JSONifying
+  const deps = entry.deps;
+  const referrer = entry.referrer;
+
   JSON.stringify(entry, null, 2).split("\n").forEach(line => print("# " + line));
+
+  entry.deps = deps;
+  entry.referrer = referrer;
 }
 
-function printNodeModule(entry) {
+  
+/**
+ * Given a module, print a skylark `node_module` rule.
+ */
+function printNodeModule(module) {
+  const deps = module.deps;
+  
   print(``);
-  const referrer = entry.referrer;
-  const deps = entry.deps;
-  const master = entry.master;
-  //console.log('# Printing entry ' + entry.name + ' with master ', master);
-  printJson(entry);
-  const prev = cache.get(entry.name);
-  if (prev) {
-    print(`## Skipped ${entry.id} (${entry.name} resolves to ${prev.id})`);
-    return;
-  }
+  printJson(module);
   print(`node_module(`);
-  print(`    name = "${entry.name}",`);
-  if (entry.version) {
-    print(`    version = "${entry.version}",`);
-  }
+  print(`    name = "${module.name}",`);
 
-  if (entry.pkg) {
-    print(`    package_json = "node_modules/${entry.name}/package.json",`);
-    print(`    srcs = glob(["node_modules/${entry.name}/**/*"], exclude = ["node_modules/${entry.name}/package.json"]),`);
-  }
-  if (entry.bin) {
-    print(`    executables = {`);
-    for (let key in entry.bin) {
-      print(`        "${key}": "${entry.bin[key]}",`);      
+  // SCC pseudomodule wont have 'yarn' property
+  if (module.yarn) {
+    const url = module.yarn.url || module.url;
+    const sha1 = module.yarn.sha1;
+    const executables = module.executables;
+    
+    print(`    version = "${module.version}",`);
+    print(`    package_json = "node_modules/${module.name}/package.json",`);
+    print(`    srcs = glob(["node_modules/${module.name}/**/*"], exclude = ["node_modules/${module.name}/package.json"]),`);
+    if (url) {
+      print(`    url = "${url}",`);
     }
-    print(`    },`);
+    if (sha1) {
+      print(`    sha1 = "${sha1}",`);
+    }
+    
+    if (executables.size > 0) {
+      print(`    executables = {`);
+      for (const [name, val] of executables.entries()) {
+        print(`        "${name}": "${val}",`);      
+      }
+      print(`    },`);
+    }
+
   }
-  if (entry.url) {
-    print(`    url = "${entry.url}",`);
-  }
-  if (entry.sha1) {
-    print(`    sha1 = "${entry.sha1}",`);
-  }
-  if (deps) {
+  if (deps && deps.size) {
     print(`    deps = [`);
-    deps.forEach(module => {
-      print(`        ":${module.name}",`);
+    deps.forEach(dep => {
+      print(`        ":${dep.name}",`);
     });
     print(`    ],`);
   }
   print(`)`);
-
-  entry.referrer = referrer;
-  entry.deps = deps;
-  entry.master = master;
-
-  cache.set(entry.name, entry);
 }
 
-function printNodeModuleAll(masters) {
+
+/**
+ * Given a list of modules, print a skylark `node_module` rule that
+ * exports all its deps.
+ */
+function printNodeModuleAll(modules) {
   print(``);
   print(`# Pseudo-module that basically acts as a module collection for the entire set`);
   print(`node_module(`);
   print(`    name = "_all_",`);
   print(`    deps = [`);
-  for (let entry of masters.values()) {
-    print(`        ":${entry.name}",`);
-  }
+  modules.forEach(module => {
+    print(`        ":${module.name}",`);
+  });
   print(`    ],`);
   print(`)`);
 }
 
-function parsePackageJson(entry) {
-  // Ignore cluster modules
-  if (entry.name.indexOf('_scc') === 0) {
-    return;
-  }
-  const pkg = require(`./node_modules/${entry.name}/package`);
-  entry.pkg = pkg
-  if (Array.isArray(pkg.bin)) {
-    // should not happen, but ignore it if present
-  } else if (typeof pkg.bin === 'string') {
-    entry.bin = {};
-    entry.bin[entry.name] = stripBinPrefix(pkg.bin);
-  } else if (typeof pkg.bin === 'object') {
-    entry.bin = {};
-    for (let key in pkg.bin) {
-      entry.bin[key] = stripBinPrefix(pkg.bin[key]);
-    }
-  }
 
-  function stripBinPrefix(path) {
-    // Bin paths usually come in 2 flavors: './bin/foo' or 'bin/foo',
-    // sometimes other stuff like 'lib/foo'.  Remove prefix './' if it
-    // exists.
-    if (path.indexOf('./') === 0) {
-      path = path.slice(2);
-    }
-    return path;
-  }
-}
-
-function printNodeWrapperGenrule() {
-  // https://groups.google.com/forum/#!searchin/bazel-discuss/sh_binary$20environment%7Csort:relevance/bazel-discuss/u_ZUKq0S_DE/egrN1SSUCAAJ
-  print(``);
-  print(`genrule(`);
-  print(`    name = "node_wrapper",`);
-  print(`    cmd = "echo \\$$@ > $@",`);
-  print(`    outs = ["node_wrapper.sh"],`);
-  print(`    executable = True,`);
-  print(`)`);
-}
-
-function printNodeBinary(entry, key, value) {
-  const name = entry.name === key ? key : `${entry.name}_${key}`;
+/**
+ * Given a module and the name of an executable defined in it's 'bin'
+ * property, print a skylark `node_binary` rule.
+ */
+function printNodeBinary(module, key, path) {
+  const name = module.name === key ? key : `${module.name}_${key}`;
   print(``);
   print(`node_binary(`);
   print(`    name = "${name}_bin",`);
-  print(`    entrypoint = ":${entry.name}",`);
-  print(`    executable = "${key}",`);
+  print(`    entrypoint = ":${module.name}",`);
+  print(`    executable = "${key}", # Refers to './${path}' inside the module`);
   print(`)`);
 }
 
-function printNodeModuleShBinary(entry, key, value) {
-  const ident = entry.name === key ? key : `${entry.name}_${key}`;
 
-  print(``);
-  print(`sh_binary(`);
-  print(`    name = "${ident}_sh",`); // dont want sh_binary 'mkdirp' to conflict
-  print(`    srcs = [":node_wrapper"],`);
-  //print(`    args = ["$(location @node//:node)", "$(location node_modules/${name}/${path})"],`);  
-  print(`    args = ["$(location @node//:node)"],`);  
-  //print(`    deps = [":${name}_shlib"],`);
-  print(`    data = [`);
-  print(`        "@node//:node",`); // must always depend on self
-  print(`        ":${entry.name}",`); // must always depend on self
-  if (pkg.deps) {
-    pkg.deps.forEach(dep_name => {
-      print(`        ":${dep.name}",`);
-    });
+/**
+ * Given the name of a top-level folder in node_modules, parse the
+ * package json and return it as an object.
+ */
+function parseNodeModulePackageJson(name) {
+  const module = require(`../node_modules/${name}/package`);
+
+  // Take this opportunity to cleanup the module.bin entries
+  // into a new Map called 'executables'
+  const executables = module.executables = new Map();
+  
+  if (Array.isArray(module.bin)) {
+    // should not happen, but ignore it if present
+  } else if (typeof module.bin === 'string') {
+    executables.set(name, stripBinPrefix(module.bin));
+  } else if (typeof module.bin === 'object') {
+    for (let key in module.bin) {
+      executables.set(key, stripBinPrefix(module.bin[key]));
+    }
   }
-  print(`    ],`);
-  print(`)`);
+
+  return module;  
 }
 
+/**
+ * Given a path, remove './' if it exists.
+ */
+function stripBinPrefix(path) {
+  // Bin paths usually come in 2 flavors: './bin/foo' or 'bin/foo',
+  // sometimes other stuff like 'lib/foo'.  Remove prefix './' if it
+  // exists.
+  if (path.indexOf('./') === 0) {
+    path = path.slice(2);
+  }
+  return path;
+}
+
+/**
+ * Write a string to stdout (console.log).
+ */
 function print(msg) {
   console.log(msg);
 }
