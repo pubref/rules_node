@@ -56,7 +56,10 @@ def _yarn_modules_impl(ctx):
     execute(ctx, ["cp", yarn_js, "yarn.js"])
 
     # Build node_modules via 'yarn install'
-    execute(ctx, [node, yarn_js, "install"], quiet = True)
+    execute(ctx, [node, yarn_js, "install"], quiet = True, environment = {
+        # postinstall scripts may need to find the node binary
+        "PATH": "$PATH:%s" % ctx.path(node).dirname,
+    })
 
     # Build a node_modules with this single dependency
     ctx.download_and_extract(
@@ -67,7 +70,8 @@ def _yarn_modules_impl(ctx):
     )
 
     # Run the script and save the stdout to our BUILD file(s)
-    result = execute(ctx, [node, "parse_yarn_lock.js"], quiet = True)
+    parse_args = ["--resolve=%s:%s" % (k, v) for k, v in ctx.attr.resolutions.items()]
+    result = execute(ctx, [node, "parse_yarn_lock.js"] + parse_args, quiet = False)
     ctx.file("BUILD", result.stdout)
     ctx.file("BUILD.bazel", result.stdout)
 
@@ -103,5 +107,6 @@ yarn_modules = repository_rule(
             allow_files = FileType(["package.json"]),
         ),
         "deps": attr.string_dict(mandatory = False),
+        "resolutions": attr.string_dict(mandatory = False),
     }
 )

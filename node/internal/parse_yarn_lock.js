@@ -1,5 +1,30 @@
 'use strict';
 
+// Resolution map
+const resolutions = new Map();
+
+// Process Arguments
+process.argv.forEach(arg => {
+  if (arg.indexOf('--resolve') === 0) {
+    let key, val;
+    let tokens = arg.split("=");
+    if (tokens.length === 2) {
+      tokens = tokens[1].trim().split(':');
+      if (tokens.length === 2) {
+        key = tokens[0];
+        val = tokens[1];
+      }
+    }
+    if (key && val) {
+      resolutions.set(key, val);
+      //console.log(`--resolve=${key}:${val}`);
+    } else {
+      throw new Error("Malformed argument.  Should be something like --resolve=minimist:1.2.0");
+    }
+  }
+});
+
+
 const fs = require('fs');
 const lockfile = require('@yarnpkg/lockfile');
 
@@ -11,20 +36,214 @@ if (json.type !== 'success') {
 }
 
 const entries = Object.keys(json.object).map(key => makeEntry(key, json.object[key]));
-const cache = new Map();
+
+const conflicts = new Map();
+const masters = deduplicateEntries(entries, conflicts, resolutions);
+if (conflicts.size > 0) {
+  const lines = [];
+  lines.push("Module conflicts detected");
+  for (const [name, list] of conflicts.entries()) {
+    lines.push(`${name}: ${list.map(e => e.version).join(", ")}`)
+  }
+  throw new Error(lines.join("\n"));
+}
+
+masters.forEach(entry => parsePackageJson(entry));
+
+breakCircularDependencies(masters);
 
 print("");
 print("package(default_visibility = ['//visibility:public'])");
 print("load('@org_pubref_rules_node//node:rules.bzl', 'node_module', 'node_binary')");
 
-entries.forEach(entry => printNodeModule(entry));
+const cache = new Map();
+//entries.forEach(entry => printNodeModule(entry));
+masters.forEach(entry => printNodeModule(entry));
 
-printNodeModules(cache);
+printNodeModuleAll(masters);
 
-cache.forEach(entry => parsePackageJson(entry));
+printNodeWrapperGenrule();
+
+// Create an executable rule all executable entryies in the modules
+masters.forEach(entry => {
+  if (entry.bin) {
+    Object.keys(entry.bin).forEach(key => printNodeBinary(entry, key, entry.bin[key]));
+  }
+});
 
 print("");
 print("# EOF");
+
+
+
+function deduplicateEntries(entries, conflicts, resolutions) {
+  const masters = new Map();
+  // Mapping of entry name (string) to entry[] list
+  const versions = new Map();
+  entries.forEach(entry => {
+    let list = versions.get(entry.name);
+    if (!list) {
+      list = [];
+      versions.set(entry.name, list);
+      list.push(entry);
+    } else {
+      // Get multiple resolved duplicate versions. Ignore this entry if
+      // already represented in the set.
+      let unique = false;
+      list.forEach(item => {
+        if (item.version !== entry.version) {
+          unique = true;
+        }
+      });
+      if (unique) {
+        list.push(entry);
+      }
+    }
+  });
+  for (const name of versions.keys()) {
+    const list = versions.get(name);
+    if (list.length > 1) {
+      let resolved = undefined;
+      const preferredVersion = resolutions.get(name);
+      if (preferredVersion) {
+        list.forEach(item => {
+          if (item.version === preferredVersion) {
+            resolved = item;
+          }
+        });
+      }
+      if (resolved) {
+        masters.set(name, resolved);        
+      } else {
+        conflicts.set(name, list)
+      }
+    } else {
+      masters.set(name, list[0]);
+    }
+  }
+  return masters;
+}
+
+function deduplicateEntries2(entries) {
+  const masters = new Map();
+  entries.forEach(entry => {
+    const master = masters.get(entry.name);
+    if (master) {
+      // Put a reference to the unique sentinel module on the entry.
+      // If an entry has a non-null master entry, it is a duplicate.
+      entry.master = master;
+    } else {
+      masters.set(entry.name, entry);
+    }
+  });
+  return masters;
+}
+
+    
+function breakCircularDependencies(masters) {
+
+  // Make a list of nodes 
+  const nodes = Array.from(masters.keys());
+  // An Array<Array<number>> array for the edges
+  const edges = [];
+  // And a mapping for backreferences mapped by name
+  const backrefs = new Map();
+
+  // Build the adjacencyList
+  nodes.forEach((node, index) => {
+    const list = [];
+    edges[index] = list;
+    const entry = masters.get(node);
+    // Make a set of deps rather than using the entry.dependencies
+    // mapping.
+    entry.deps = new Set();
+    
+    if (entry.dependencies) {
+      
+      Object.keys(entry.dependencies).forEach(name => {
+
+        // Save this in the deps set
+        const dependency = masters.get(name);
+        entry.deps.add(dependency);
+        
+        // Populate the adjacency list
+        const depIndex = nodes.indexOf(name);
+        list.push(depIndex);
+        
+        // Compute referrer backreferences for later use.
+        let referrer = dependency.referrer;
+        if (!referrer) {
+          referrer = dependency.referrer = new Set();
+        }
+        referrer.add(entry);
+
+      });
+    }
+  });
+
+  const clusters = stronglyConnectedComponents(edges);
+
+  // Foreach non-trivial cluster in the SCC, create a pseudo-module
+  // for the cluster and re-link each entry to point to the cluster
+  // rather than the dependency.
+  clusters.components.forEach((component, index) => {
+
+    if (component.length > 1) {
+      // console.log("SCC: ", component);
+      // component.forEach(element => {
+      //   console.log(`Component ${index} contains ${nodes[element]} (${element})`);
+      // });
+
+      // Create a name for the pseudo-module
+      const name = '_scc' + index;
+      // The dependencies in this cluster component
+      const deps = new Set();
+      // The pseudo-module for the cluster
+      const pseudo = {
+        name: name,
+        deps: deps
+      };
+
+      // A list of entries in this component
+      const list = [];
+      // Last entry in the component can be standalone
+      for (let i = 0; i < component.length; i++) {
+        list.push( masters.get(nodes[component[i]]) );
+      }
+
+      // A description for the module
+      pseudo.description = "Strongly connected component containing " + list.map(e => e.name).join(", ")
+      
+      list.forEach(entry => {
+        // Add this to the pseudo-module
+        deps.add(entry);
+
+        // Iterate the set of items that link to this entry.  Replace
+        // their deps set with the psudo-module rather than the entry
+        // itself.
+        entry.referrer.forEach(ref => {
+          ref.deps.delete(entry);
+
+          // Add an entry to the scc component (unless it is a member
+          // of it).
+          if (!deps.has(ref)) {
+            ref.deps.add(pseudo);
+          }
+        });
+
+        // Each entry in the cluster must have no other outgoing
+        // dependencies
+        entry.deps = new Set();
+      });
+
+      // Store this new pseudo-module in the master list
+      masters.set(pseudo.name, pseudo);      
+    }
+    
+  });
+
+  return masters;
+}
 
 function makeEntry(key, entry) {
   parseName(key, entry);
@@ -56,11 +275,18 @@ function printDownloadMeta(entry) {
 }
 
 function printJson(entry) {
+  delete entry.deps;
+  delete entry.master;
+  delete entry.referrer;
   JSON.stringify(entry, null, 2).split("\n").forEach(line => print("# " + line));
 }
 
 function printNodeModule(entry) {
   print(``);
+  const referrer = entry.referrer;
+  const deps = entry.deps;
+  const master = entry.master;
+  //console.log('# Printing entry ' + entry.name + ' with master ', master);
   printJson(entry);
   const prev = cache.get(entry.name);
   if (prev) {
@@ -69,31 +295,50 @@ function printNodeModule(entry) {
   }
   print(`node_module(`);
   print(`    name = "${entry.name}",`);
-  print(`    version = "${entry.version}",`);
-  print(`    url = "${entry.url}",`);
-  print(`    sha1 = "${entry.sha1}",`);
-  print(`    package_json = "node_modules/${entry.name}/package.json",`);
-  print(`    srcs = glob(["node_modules/${entry.name}/**/*"], exclude = ["node_modules/${entry.name}/package.json"]),`);
+  if (entry.version) {
+    print(`    version = "${entry.version}",`);
+  }
 
-  if (entry.dependencies) {
+  if (entry.pkg) {
+    print(`    package_json = "node_modules/${entry.name}/package.json",`);
+    print(`    srcs = glob(["node_modules/${entry.name}/**/*"], exclude = ["node_modules/${entry.name}/package.json"]),`);
+  }
+  if (entry.bin) {
+    print(`    executables = {`);
+    for (let key in entry.bin) {
+      print(`        "${key}": "${entry.bin[key]}",`);      
+    }
+    print(`    },`);
+  }
+  if (entry.url) {
+    print(`    url = "${entry.url}",`);
+  }
+  if (entry.sha1) {
+    print(`    sha1 = "${entry.sha1}",`);
+  }
+  if (deps) {
     print(`    deps = [`);
-    Object.keys(entry.dependencies).forEach(module => {
-      print(`        ":${module}",`);
+    deps.forEach(module => {
+      print(`        ":${module.name}",`);
     });
     print(`    ],`);
   }
   print(`)`);
 
+  entry.referrer = referrer;
+  entry.deps = deps;
+  entry.master = master;
+
   cache.set(entry.name, entry);
 }
 
-function printNodeModules(map) {
+function printNodeModuleAll(masters) {
   print(``);
   print(`# Pseudo-module that basically acts as a module collection for the entire set`);
   print(`node_module(`);
   print(`    name = "_all_",`);
   print(`    deps = [`);
-  for (let entry of map.values()) {
+  for (let entry of masters.values()) {
     print(`        ":${entry.name}",`);
   }
   print(`    ],`);
@@ -101,53 +346,72 @@ function printNodeModules(map) {
 }
 
 function parsePackageJson(entry) {
+  // Ignore cluster modules
+  if (entry.name.indexOf('_scc') === 0) {
+    return;
+  }
   const pkg = require(`./node_modules/${entry.name}/package`);
+  entry.pkg = pkg
   if (Array.isArray(pkg.bin)) {
-    // should not happen: throw new Error('Hmm, I didn\'t realize pkg.bin could be an array.');
+    // should not happen, but ignore it if present
   } else if (typeof pkg.bin === 'string') {
-    printNodeModuleShBinary(entry, pkg, entry.name, pkg.bin);
+    entry.bin = {};
+    entry.bin[entry.name] = stripBinPrefix(pkg.bin);
   } else if (typeof pkg.bin === 'object') {
-    Object.keys(pkg.bin).forEach(key => printNodeModuleShBinary(entry, pkg, key, pkg.bin[key]));
+    entry.bin = {};
+    for (let key in pkg.bin) {
+      entry.bin[key] = stripBinPrefix(pkg.bin[key]);
+    }
+  }
+
+  function stripBinPrefix(path) {
+    // Bin paths usually come in 2 flavors: './bin/foo' or 'bin/foo',
+    // sometimes other stuff like 'lib/foo'.  Remove prefix './' if it
+    // exists.
+    if (path.indexOf('./') === 0) {
+      path = path.slice(2);
+    }
+    return path;
   }
 }
 
-function printNodeModuleShBinary(entry, pkg, name, path) {
+function printNodeWrapperGenrule() {
+  // https://groups.google.com/forum/#!searchin/bazel-discuss/sh_binary$20environment%7Csort:relevance/bazel-discuss/u_ZUKq0S_DE/egrN1SSUCAAJ
   print(``);
-  print(`sh_binary(`);
-  print(`    name = "${name}_bin",`); // dont want sh_binary 'mkdirp' to conflict
-  print(`    srcs = [":node_modules/.bin/${name}"],`);
-  print(`    data = [`);
-  print(`        ":${entry.name}",`); // must always depend on self
-  if (pkg.dependencies) {
-    Object.keys(pkg.dependencies).forEach(dep_name => {
-      const dep_entry = cache.get(dep_name);
-      if (!dep_entry) {
-        throw new Error('Cannot find dependency entry for ' + dep_name);
-      }
-      print(`        ":${dep_entry.name}",`);
-    });
-  }
-  print(`    ],`);
+  print(`genrule(`);
+  print(`    name = "node_wrapper",`);
+  print(`    cmd = "echo \\$$@ > $@",`);
+  print(`    outs = ["node_wrapper.sh"],`);
+  print(`    executable = True,`);
   print(`)`);
 }
 
-function printNodeModuleBinary(entry, pkg, name, path) {
-  if (path.indexOf("./") === 0) {
-    path = path.slice(2);
-  }
+function printNodeBinary(entry, key, value) {
+  const name = entry.name === key ? key : `${entry.name}_${key}`;
+  print(``);
+  print(`node_binary(`);
+  print(`    name = "${name}_bin",`);
+  print(`    entrypoint = ":${entry.name}",`);
+  print(`    executable = "${key}",`);
+  print(`)`);
+}
+
+function printNodeModuleShBinary(entry, key, value) {
+  const ident = entry.name === key ? key : `${entry.name}_${key}`;
+
   print(``);
   print(`sh_binary(`);
-  print(`    name = "${entry.name}_${name}",`);
-  print(`    srcs = [":node_modules/${entry.name}/${path}"],`);
+  print(`    name = "${ident}_sh",`); // dont want sh_binary 'mkdirp' to conflict
+  print(`    srcs = [":node_wrapper"],`);
+  //print(`    args = ["$(location @node//:node)", "$(location node_modules/${name}/${path})"],`);  
+  print(`    args = ["$(location @node//:node)"],`);  
+  //print(`    deps = [":${name}_shlib"],`);
   print(`    data = [`);
+  print(`        "@node//:node",`); // must always depend on self
   print(`        ":${entry.name}",`); // must always depend on self
-  if (pkg.dependencies) {
-    Object.keys(pkg.dependencies).forEach(dep_name => {
-      const dep_entry = cache.get(dep_name);
-      if (!dep_entry) {
-        throw new Error('Cannot find dependency entry for ' + dep_name);
-      }
-      print(`        ":${dep_entry.name}",`);
+  if (pkg.deps) {
+    pkg.deps.forEach(dep_name => {
+      print(`        ":${dep.name}",`);
     });
   }
   print(`    ],`);
@@ -156,4 +420,121 @@ function printNodeModuleBinary(entry, pkg, name, path) {
 
 function print(msg) {
   console.log(msg);
+}
+
+/** 
+ * Given an adjacency list, compute Tarjan's SCC.
+ * 
+ * https://github.com/mikolalysenko/strongly-connected-components/blob/master/scc.js
+ * Copyright https://github.com/mikolalysenko
+ */
+function stronglyConnectedComponents(adjList) {
+  var numVertices = adjList.length;
+  var index = new Array(numVertices)
+  var lowValue = new Array(numVertices)
+  var active = new Array(numVertices)
+  var child = new Array(numVertices)
+  var scc = new Array(numVertices)
+  var sccLinks = new Array(numVertices)
+  
+  //Initialize tables
+  for (var i=0; i<numVertices; ++i) {
+    index[i] = -1
+    lowValue[i] = 0
+    active[i] = false
+    child[i] = 0
+    scc[i] = -1
+    sccLinks[i] = []
+  }
+
+  // The strongConnect function
+  var count = 0
+  var components = []
+  var sccAdjList = []
+
+  function strongConnect(v) {
+    // To avoid running out of stack space, this emulates the recursive behaviour of the normal algorithm, effectively using T as the call stack.
+    var S = [v], T = [v]
+    index[v] = lowValue[v] = count
+    active[v] = true
+    count += 1
+    while(T.length > 0) {
+      v = T[T.length-1]
+      var e = adjList[v]
+      if (child[v] < e.length) { // If we're not done iterating over the children, first try finishing that.
+        for(var i=child[v]; i<e.length; ++i) { // Start where we left off.
+          var u = e[i]
+          if(index[u] < 0) {
+            index[u] = lowValue[u] = count
+            active[u] = true
+            count += 1
+            S.push(u)
+            T.push(u)
+            break // First recurse, then continue here (with the same child!).
+            // There is a slight change to Tarjan's algorithm here.
+            // Normally, after having recursed, we set lowValue like we do for an active child (although some variants of the algorithm do it slightly differently).
+            // Here, we only do so if the child we recursed on is still active.
+            // The reasoning is that if it is no longer active, it must have had a lowValue equal to its own index, which means that it is necessarily higher than our lowValue.
+          } else if (active[u]) {
+            lowValue[v] = Math.min(lowValue[v], lowValue[u])|0
+          }
+          if (scc[u] >= 0) {
+            // Node v is not yet assigned an scc, but once it is that scc can apparently reach scc[u].
+            sccLinks[v].push(scc[u])
+          }
+        }
+        child[v] = i // Remember where we left off.
+      } else { // If we're done iterating over the children, check whether we have an scc.
+        if(lowValue[v] === index[v]) { // TODO: It /might/ be true that T is always a prefix of S (at this point!!!), and if so, this could be used here.
+          var component = []
+          var links = [], linkCount = 0
+          for(var i=S.length-1; i>=0; --i) {
+            var w = S[i]
+            active[w] = false
+            component.push(w)
+            links.push(sccLinks[w])
+            linkCount += sccLinks[w].length
+            scc[w] = components.length
+            if(w === v) {
+              S.length = i
+              break
+            }
+          }
+          components.push(component)
+          var allLinks = new Array(linkCount)
+          for(var i=0; i<links.length; i++) {
+            for(var j=0; j<links[i].length; j++) {
+              allLinks[--linkCount] = links[i][j]
+            }
+          }
+          sccAdjList.push(allLinks)
+        }
+        T.pop() // Now we're finished exploring this particular node (normally corresponds to the return statement)
+      }
+    }
+  }
+
+  //Run strong connect starting from each vertex
+  for(var i=0; i<numVertices; ++i) {
+    if(index[i] < 0) {
+      strongConnect(i)
+    }
+  }
+  
+  // Compact sccAdjList
+  var newE
+  for(var i=0; i<sccAdjList.length; i++) {
+    var e = sccAdjList[i]
+    if (e.length === 0) continue
+    e.sort(function (a,b) { return a-b; })
+    newE = [e[0]]
+    for(var j=1; j<e.length; j++) {
+      if (e[j] !== e[j-1]) {
+        newE.push(e[j])
+      }
+    }
+    sccAdjList[i] = newE
+  }  
+
+  return {components: components, adjacencyList: sccAdjList}
 }

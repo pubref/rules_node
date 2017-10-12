@@ -40,7 +40,7 @@ def _get_module_name(ctx):
     return ctx.attr.separator.join(parts)
 
 
-def _create_package_json(ctx, name, files):
+def _create_package_json(ctx, name, files, executables):
     output_file = ctx.new_file("%s/package.json" % name)
 
     json = {
@@ -52,10 +52,14 @@ def _create_package_json(ctx, name, files):
     }
 
     if len(files) > 0:
-        json["files"] = list(depset([_get_path_for_module_file(ctx, output_file, file, {}) for file in files]))
+        json["files"] = depset([_get_path_for_module_file(ctx, output_file, file, {}) for file in files]).to_list()
 
+    if executables:
+        json["bin"] = executables
+        
     if ctx.attr.main:
         json["main"] = ctx.file.main.basename
+
 
     # Add dependencies if they exist
     if (ctx.attr.deps):
@@ -78,7 +82,7 @@ def _get_transitive_modules(deps, key):
     for dep in deps:
         module = dep.node_module
         modules += [module]
-        modules += getattr(module, key)
+        modules += getattr(module, key, [])
     return modules
 
 
@@ -119,6 +123,8 @@ def _node_module_impl(ctx):
     if ctx.file.main:
         files.append(ctx.file.main)
 
+    executables = ctx.attr.executables
+        
     package_json = ctx.file.package_json
 
     # The presence of an index file suppresses creation of the
@@ -126,7 +132,7 @@ def _node_module_impl(ctx):
     # provided.
     if len(files) > 0 and not package_json:
         if ctx.attr.main or not ctx.file.index:
-            package_json = _create_package_json(ctx, name, files)
+            package_json = _create_package_json(ctx, name, files, executables)
     if package_json:
         outputs.append(package_json)
 
@@ -154,6 +160,7 @@ def _node_module_impl(ctx):
             url = ctx.attr.url,
             sha1 = ctx.attr.sha1,
             description = ctx.attr.description,
+            executables = executables,
             package_json = package_json,
             root = root_file,
             sourcemap = sourcemap,
@@ -232,6 +239,12 @@ node_module = rule(
             providers = ["node_module"],
         ),
 
+        # 'Binary' scripts, to be named in the 'package_json.bin' property.
+        # This uses the plain 'string_dict' attribute since bazel does not
+        # have the more intuitive 'string_keyed_label_dict'-type attribute.
+        "executables": attr.string_dict(
+        ),
+
         # Module version
         "version": attr.string(
             default = "1.0.0",
@@ -254,7 +267,6 @@ node_module = rule(
         # File that should be named as the package.json 'main'
         # attribute.
         "main": attr.label(
-            #allow_files = _node_filetype,
             allow_files = True,
             mandatory = False,
             single_file = True,

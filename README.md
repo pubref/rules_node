@@ -249,6 +249,7 @@ These are only relevant if you don't explicitly name a `package.json` file.
 | optional | `string` | `url` | `None` | Url where the module tgz archive was resolved
 | optional | `string` | `sha1` | `None` | Sha1 hash of of the resolved tgz archive
 | optional | `string` | `description` | `None` | Module description
+| optional | `string_dict` | `executables` | `None` | A mapping from binary name to internal node module path.  Example `executables = { 'foo': 'bin/foo' }`.
 
 ### node_module attributes that affect the relative path of files included in the module
 
@@ -298,6 +299,20 @@ the entrypoint (under the hood, it will just build a `node_module`
 (called `foo_module`) for your single `main` foo.js file entrypoint,
 becoming equivalent to the first example).
 
+
+```python
+node_binary(
+    name = "foo",
+    entrypoint = ":my_module_2",
+    executable = "baz",
+)
+```
+
+In this third example (above), we're specifying the name of the node
+module to start with (`my_module_2`) and the name of the executable
+within `my_module_2` to run (`baz`).  In this case the `node_module`
+rule definition for `my_module_2` must have a `string_dict` with an
+entry for `baz` (like `executables = { 'baz': 'bin/baz' }`.
 
 ### Output structure of files generated for a `node_binary` rule
 

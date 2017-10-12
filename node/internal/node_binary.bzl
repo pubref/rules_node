@@ -3,17 +3,14 @@ load("//node:internal/node_module.bzl", "node_module")
 
 _node_filetype = FileType(['.js', '.node'])
 
-def _get_relative_dirname(file):
-    return file.path[0:-len(file.short_path)]
 
-
-def _get_filename_relative_to_module(module, file):
-    name = module.name
+def _get_filename_relative_to_module_name(name, file):
     parts = file.path.partition(name)
     return '/'.join(parts[1:])
 
 
 def _copy_module(ctx, output_dir, module):
+
     if len(module.files) == 0:
         return []
 
@@ -25,7 +22,7 @@ def _copy_module(ctx, output_dir, module):
 
     for src in module.files:
         inputs.append(src)
-        dst_filename = _get_filename_relative_to_module(module, src)
+        dst_filename = _get_filename_relative_to_module_name(module.name, src)
         dst = ctx.new_file('%s/node_modules/%s' % (output_dir, dst_filename))
         outputs.append(dst)
         script_lines.append("cp '%s' '%s'" % (src.path, dst.path))
@@ -45,9 +42,7 @@ def _copy_module(ctx, output_dir, module):
 
     return outputs
 
-# NOTE(pcj): I tried in vain to make a version of this based on
-# symlinks, either of the folders or the files themselves.  Maybe you
-# can get that figured out.
+
 def copy_modules(ctx, output_dir, deps):
     outputs = []
     for dep in deps:
@@ -59,15 +54,19 @@ def copy_modules(ctx, output_dir, deps):
 
 
 def _create_launcher(ctx, output_dir, node):
+    
     entry_module = ctx.attr.entrypoint.node_module
     entrypoint = 'node_modules/%s' % entry_module.name
 
+    if ctx.attr.executable:
+        entrypoint += "/" + entry_module.executables[ctx.attr.executable]
+        
     # cd $(dirname $0)/bundle and exec node node_modules/foo
     cmd = [
         'cd $ROOT/%s' % output_dir,
         '&&',
         'exec',
-        ctx.executable._node.basename,
+        './' + ctx.executable._node.basename,
     ] + ctx.attr.node_args + [
         entrypoint,
     ] + ctx.attr.script_args + [
@@ -78,6 +77,10 @@ def _create_launcher(ctx, output_dir, node):
         '#!/usr/bin/env bash', # TODO(user): fix for windows
         'set -e',
 
+        #'pwd',
+        #'ls -al .',
+        #'find .',
+        
         # Set the execution root to the same directory where the
         # script lives.  We know for sure that node executable and
         # node_modules dir will also be close to here since we
@@ -105,7 +108,10 @@ def node_binary_impl(ctx):
 
     manifest_file = ctx.new_file('%s/node_modules/manifest.json' % output_dir)
     json = {}
-    all_deps = ctx.attr.deps + [ctx.attr.entrypoint]
+    all_deps = [] + ctx.attr.deps
+    if ctx.attr.entrypoint:
+        all_deps.append(ctx.attr.entrypoint)
+    
     files = copy_modules(ctx, output_dir, all_deps)
 
     dependencies = {}
@@ -132,9 +138,11 @@ def node_binary_impl(ctx):
     _create_launcher(ctx, output_dir, node)
 
     runfiles = [node, manifest_file, ctx.outputs.executable] + files
+        
     files = runfiles if ctx.attr.export_files else []
 
     return struct(
+        files = depset(files),
         runfiles = ctx.runfiles(
             files = runfiles,
             collect_data = True,
@@ -145,17 +153,26 @@ def node_binary_impl(ctx):
     )
 
 binary_attrs = {
+    # The main entrypoint module to run
     'entrypoint': attr.label(
         providers = ['node_module'],
-        mandatory = True,
+        mandatory = False,
     ),
+    # A named executable module script to run
+    'executable': attr.string(
+        mandatory = False,
+    ),
+    # node_module dependencies
     'deps': attr.label_list(
         providers = ['node_module'],
     ),
+    # Raw Arguments to the node executable
     'node_args': attr.string_list(
     ),
+    # Arguments to be included in the launcher script
     'script_args': attr.string_list(
     ),
+    # The node executable
     '_node': attr.label(
         default = Label('@node//:node'),
         single_file = True,
@@ -169,6 +186,7 @@ binary_attrs = {
 _node_binary = rule(
     node_binary_impl,
     attrs = binary_attrs + {
+        # Export as a files provider if True.
         'export_files': attr.bool(
             default = False,
         ),
@@ -192,7 +210,16 @@ _node_binary_files = rule(
     },
 )
 
-def node_binary(name = None, main = None, entrypoint = None, version = None, node_args = [], deps = [], extension = 'tgz', visibility = None, **kwargs):
+def node_binary(name = None,
+                main = None,
+                executable = None,
+                entrypoint = None,
+                version = None,
+                node_args = [],
+                deps = [],
+                extension = 'tgz',
+                visibility = None,
+                **kwargs):
 
     if not entrypoint:
         if not main:
@@ -210,6 +237,7 @@ def node_binary(name = None, main = None, entrypoint = None, version = None, nod
     _node_binary(
         name = name,
         entrypoint = entrypoint,
+        executable = executable,
         deps = deps,
         export_files = name.endswith('_bundle.tgz'),
         node_args = node_args,

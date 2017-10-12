@@ -1,0 +1,34 @@
+local_repository(
+    name = "org_pubref_rules_node",
+    path = "../..",
+)
+
+load("@org_pubref_rules_node//node:rules.bzl", "node_repositories", "yarn_modules")
+
+node_repositories()
+
+yarn_modules(
+    name = "yarn_modules",
+    deps = {
+        "webpack": "3.4.0",
+    },
+    resolutions = {
+        "acorn": "5.1.2",
+        "ajv": "5.2.3",
+        "ansi-regex": "3.0.0",
+        "assert-plus": "1.0.0",
+        "camelcase": "4.1.0",
+        "cliui": "3.2.0",
+        "hash-base": "3.0.4",
+        "inherits": "2.0.3",
+        "is-fullwidth-code-point": "2.0.0",
+        "is-number": "3.0.0",
+        "kind-of": "4.0.0",
+        "minimist": "1.2.0",
+        "punycode": "1.4.1",
+        "string-width": "2.1.1",
+        "string_decoder": "1.0.3",
+        "strip-ansi": "4.0.0",
+        "yargs": "8.0.2",
+    }
+)
