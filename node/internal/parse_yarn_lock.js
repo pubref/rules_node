@@ -101,7 +101,7 @@ function printNodeModules(map) {
 }
 
 function parsePackageJson(entry) {
-  const pkg = require(`./node_modules/${entry.name}/package`);
+  const pkg = require(`./node_modules/${entry.name}/package.json`);
   if (Array.isArray(pkg.bin)) {
     // should not happen: throw new Error('Hmm, I didn\'t realize pkg.bin could be an array.');
   } else if (typeof pkg.bin === 'string') {
