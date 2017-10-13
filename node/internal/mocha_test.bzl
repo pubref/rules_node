@@ -4,8 +4,11 @@ load("//node:internal/node_binary.bzl", "copy_modules", "binary_attrs")
 
 def _create_launcher(ctx, output_dir, node, mocha):
     entry_module = ctx.attr.entrypoint.node_module
+    # if package is under root
     entrypoint = '%s_test/node_modules/%s' % (ctx.label.name, entry_module.name)
-
+    # if test is under inner package
+    if ctx.label.package:
+        entrypoint = '%s/%s' % (ctx.label.package, entrypoint)
     cmd = [
         node.short_path,
     ] + ctx.attr.node_args + [
@@ -21,7 +24,6 @@ def _create_launcher(ctx, output_dir, node, mocha):
         'set -e',
         ' '.join(cmd)
     ]
-
     ctx.file_action(
         output = ctx.outputs.executable,
         executable = True,
