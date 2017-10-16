@@ -226,7 +226,7 @@ def node_binary(name = None, main = None, entrypoint = None, version = None, nod
         name = name + '_bundle',
         extension = extension,
         package_dir = name,
-        srcs = [name + '_files'],
+        files = [name + '_files'],
         visibility = visibility,
         strip_prefix = '.',
     )
