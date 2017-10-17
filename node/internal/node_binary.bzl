@@ -4,8 +4,8 @@ load("//node:internal/node_module.bzl", "node_module")
 _node_filetype = FileType(['.js', '.node'])
 
 
-def _get_filename_relative_to_module_name(name, file):
-    parts = file.path.partition(name)
+def _get_filename_relative_to_module(module, file):
+    parts = file.path.partition("/%s/" % module.name)
     return '/'.join(parts[1:])
 
 
@@ -22,7 +22,7 @@ def _copy_module(ctx, output_dir, module):
 
     for src in module.files:
         inputs.append(src)
-        dst_filename = _get_filename_relative_to_module_name(module.name, src)
+        dst_filename = _get_filename_relative_to_module(module, src)
         dst = ctx.new_file('%s/node_modules/%s' % (output_dir, dst_filename))
         outputs.append(dst)
         script_lines.append("cp '%s' '%s'" % (src.path, dst.path))
@@ -53,49 +53,73 @@ def copy_modules(ctx, output_dir, deps):
     return outputs
 
 
-def _create_launcher(ctx, output_dir, node):
-    
-    entry_module = ctx.attr.entrypoint.node_module
-    entrypoint = 'node_modules/%s' % entry_module.name
+def create_launcher(ctx, output_dir, node, manifest_file):
 
+    path = manifest_file.short_path.split('/')
+    dirname = "/".join(path[0:-1])
+    entry_module = ctx.attr.entrypoint.node_module
+
+    entrypoint = entry_module.name
     if ctx.attr.executable:
         entrypoint += "/" + entry_module.executables[ctx.attr.executable]
-        
+    entrypath = '%s/%s' % (dirname, entrypoint)
+    
+
     # cd $(dirname $0)/bundle and exec node node_modules/foo
     cmd = [
-        'cd $ROOT/%s' % output_dir,
-        '&&',
-        'exec',
-        './' + ctx.executable._node.basename,
+        #'exec',
+        '"$NODE_BIN"',
     ] + ctx.attr.node_args + [
-        entrypoint,
+        '"$ENTRYPOINT"',
     ] + ctx.attr.script_args + [
         '$@',
     ]
 
+    # Next: Script should look to see if various conditions exist.
+    # 1. If the file '../yarn_modules/webpack_bin_bundle/node' exists, assume bazel run context.
+    # 2. If the file $(dirname $0)/whihc_bin_bundle/node exists, assume shell context.
+    # 3. If the file ... exists, assume TEST context.
+    # 4. If the file ... exists, assume GENFILE context (actually seems same as (2).
+    
     lines = [
         '#!/usr/bin/env bash', # TODO(user): fix for windows
-        'set -e',
-
+        'set -eu',
+        #'echo $@',
         #'pwd',
-        #'ls -al .',
+        'ls -al .',
         #'find .',
-        
-        # Set the execution root to the same directory where the
-        # script lives.  We know for sure that node executable and
-        # node_modules dir will also be close to here since we
-        # specifically built that here (this means we don't have to go
-        # through backflips to figure out what run context we're in.
         'ROOT=$(dirname $0)',
+        '# Assume we are in bazel runfiles context to start...',
+        'NODE_BIN="%s"' % node.short_path,
+        'ENTRYPOINT="%s"' % entrypath,
+        
+        '# If expected location of node not exists, try looking within runfiles',
+        '# will be present in genrule context',
+        'if [[ ! -e $NODE_BIN ]]; then',
+        '  NODE_BIN="$0.runfiles/__main__/%s"' % (node.short_path),
+        '  ENTRYPOINT="$0.runfiles/__main__/%s"' % entrypath,
+        '  echo "Trying runfiles!"',
+        'fi',
+
+        '# If this not exists, try looking for the bundle folder',
+        'if [[ ! -e $NODE_BIN ]]; then',
+        '  NODE_BIN="$(basename $0)_bundle/%s"' % (node.basename),
+        '  ENTRYPOINT="$(basename $0)_bundle/node_modules/%s"' % entrypoint,
+        '  echo "Trying bundle!"',
+        'fi',
 
         # Resolve to this node instance if other scripts have
         # '/usr/bin/env node' shebangs
         # TODO: fix for windows
         'export PATH="$ROOT:$PATH"',
 
+        #'echo "NODE_BIN: $NODE_BIN"',
+        #'echo "ENTRYPOINT: $ENTRYPOINT"',
         ' '.join(cmd)
     ]
 
+    #print("\n".join(lines))
+    
     ctx.file_action(
         output = ctx.outputs.executable,
         executable = True,
@@ -103,6 +127,7 @@ def _create_launcher(ctx, output_dir, node):
     )
 
 
+    
 def node_binary_impl(ctx):
     output_dir = ctx.label.name + '_bundle'
 
@@ -134,15 +159,12 @@ def node_binary_impl(ctx):
         outputs = [node],
         command = 'cp %s %s' % (ctx.executable._node.path, node.path),
     )
-
-    _create_launcher(ctx, output_dir, node)
+    
+    create_launcher(ctx, output_dir, node, manifest_file)
 
     runfiles = [node, manifest_file, ctx.outputs.executable] + files
         
-    files = runfiles if ctx.attr.export_files else []
-
     return struct(
-        files = depset(files),
         runfiles = ctx.runfiles(
             files = runfiles,
             collect_data = True,
@@ -185,12 +207,7 @@ binary_attrs = {
 
 _node_binary = rule(
     node_binary_impl,
-    attrs = binary_attrs + {
-        # Export as a files provider if True.
-        'export_files': attr.bool(
-            default = False,
-        ),
-    },
+    attrs = binary_attrs,
     executable = True,
 )
 
@@ -239,7 +256,6 @@ def node_binary(name = None,
         entrypoint = entrypoint,
         executable = executable,
         deps = deps,
-        export_files = name.endswith('_bundle.tgz'),
         node_args = node_args,
         visibility = visibility,
     )
@@ -257,4 +273,45 @@ def node_binary(name = None,
         srcs = [name + '_files'],
         visibility = visibility,
         strip_prefix = '.',
+    )
+
+
+_node_test = rule(
+    node_binary_impl,
+    attrs = binary_attrs,
+    test = True,
+)
+
+
+def node_test(name = None,
+              main = None,
+              executable = None,
+              entrypoint = None,
+              version = None,
+              node_args = [],
+              deps = [],
+              extension = 'tgz',
+              visibility = None,
+              **kwargs):
+
+    if not entrypoint:
+        if not main:
+            fail('Either an entrypoint node_module or a main script file must be specified')
+        entrypoint = name + '_module'
+        node_module(
+            name = entrypoint,
+            main = main,
+            deps = [],
+            version = version,
+            visibility = visibility,
+            **kwargs
+        )
+
+    _node_test(
+        name = name,
+        entrypoint = entrypoint,
+        executable = executable,
+        deps = deps,
+        node_args = node_args,
+        visibility = visibility,
     )
