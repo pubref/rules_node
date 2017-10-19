@@ -7,7 +7,8 @@ node_binary(
     main = "lyrics.js",
     deps = [
         "@yarn_modules//:underscore",
-    ]
+    ],
+    deploy = 'tar.gz',
 )
 
 sh_test(

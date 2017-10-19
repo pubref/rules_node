@@ -58,8 +58,11 @@ def _create_package_json(ctx, name, files, executables):
         json["bin"] = executables
         
     if ctx.attr.main:
-        json["main"] = ctx.file.main.basename
+        json["main"] = ctx.label.package + '/' + ctx.file.main.basename
+        #json["main"] = _relname(ctx, output_file, ctx.file.main)
+        #json["main"] = ctx.file.main.basename
 
+    # Currently very confused on why I cannot seem to effect the output of this main attribute... WHere is gen/compiler.runfiles etc???
 
     # Add dependencies if they exist
     if (ctx.attr.deps):
@@ -69,6 +72,8 @@ def _create_package_json(ctx, name, files, executables):
 
     content = struct(**json)
 
+    print("json content!: %s" % content)
+    
     ctx.file_action(
         output = output_file,
         content = content.to_json(),

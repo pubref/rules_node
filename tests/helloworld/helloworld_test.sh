@@ -1,6 +1,6 @@
 set -e
 
-if ./helloworld | grep -q 'Hello World!'; then
+if ./helloworld_bin | grep -q 'Hello World!'; then
     echo "PASS"
 else
     exit 1
