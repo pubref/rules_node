@@ -1,8 +1,22 @@
-test_all:
-	(cd tests/helloworld && bazel test //:helloworld_test)
-	(cd tests/lyrics && bazel test //:lyrics_test)
-	(cd tests/express && bazel test //:server_test)
-	(cd tests/namespace && bazel test //:question_test)
-	(cd tests/typescript && bazel test //:typescript_test)
-	(cd tests/mocha && bazel test //:test)
-	(cd tests/mocha && bazel test //tests:test)
+test_helloworld:
+	(cd tests/helloworld && bazel test //...)
+
+test_lyrics:
+	(cd tests/lyrics && bazel test //...)
+
+test_express:
+	(cd tests/express && bazel test //...)
+
+test_namespace:
+	(cd tests/namespace && bazel test //...)
+
+test_typescript:
+	(cd tests/typescript && bazel test //...)
+
+test_webpack:
+	(cd tests/webpack && bazel test //...)
+
+test_mocha:
+	(cd tests/mocha && bazel test //...)
+
+test_all: test_helloworld test_lyrics test_express test_namespace test_typescript test_webpack test_mocha

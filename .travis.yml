@@ -8,9 +8,10 @@ os:
   - osx
 
 env:
+  - V=0.7.0
+  - V=0.6.1
   - V=0.5.4
   - V=0.5.3
-  # Not compatible under 5.3
 
 before_install:
   - OS=linux

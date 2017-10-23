@@ -1,3 +1,4 @@
+var greet = require('src/main/js/greeter');
 var assert = require('assert');
 
 describe('Array', function() {
@@ -6,4 +7,10 @@ describe('Array', function() {
       assert.equal(-1, [1,2,3].indexOf(4));
     });
   });
+});
+
+describe('#greet()', function() {
+    it('should say hello', function() {
+        assert.equal('Hello World!', greet('World'));
+    });
 });

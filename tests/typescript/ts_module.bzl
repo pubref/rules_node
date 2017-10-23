@@ -1,15 +1,12 @@
 load("@org_pubref_rules_node//node:rules.bzl", "node_module")
 
-
-def _get_d_ts_files(list):
-    files = []
-    for file in list:
-        if file.path.endswith(".d.ts"):
-            files.append(file)
-    return files
-
+# Note: this is not by any means production quality support for
+# typescript.  It's more of an experiment to exercise the
+# behavior/utility of the node_module rule in various circumstances.
 
 def _build_node_module(ctx, compilation_dir, node_module):
+    """Copy the given node_module into the specified compilation dir"""
+    
     outputs = []
     for src in node_module.sources:
         relpath = node_module.sourcemap[src.path]
@@ -25,25 +22,59 @@ def _build_node_module(ctx, compilation_dir, node_module):
     return outputs
 
 
+def _get_relative_path(file, rel):
+    """Get the path of a file relative to to rel.
+    
+    For example, if rel is the bazel-bin/foo/tsconfig.json and 'file'
+    is bazel-bin/foo/a/b/c.ts, return 'a/b/c.ts'
+    """
+    
+    return file.path[len(rel.dirname) + 1:]
+
+
+def _create_tsconfig(ctx, compilation_dir, srcs):
+    """Create the tsconfig.json file"""
+    
+    # The tsconfig file to be generated
+    tsconfig_file = ctx.new_file("%s/tsconfig.json" % compilation_dir)
+
+    # The files that we want to compile
+    files = [_get_relative_path(file, tsconfig_file) for file in srcs]
+
+    # Todo: add all the necessary attributes for the tsconfig
+    json = {
+        "name": ctx.label.name,
+        "files": files
+    }
+
+    # Generate a struct from the map
+    content = struct(**json)
+
+    # Create a file action to generate it...
+    ctx.file_action(
+        output = tsconfig_file,
+        content = content.to_json(),
+    )
+
+    return tsconfig_file
+
+    
 def _ts_module_impl(ctx):
-    node = ctx.executable._node
-    tsc = ctx.executable._tsc
-    tsconfig = ctx.file.tsconfig
-    inputs = [node, tsc]
-    if tsconfig:
-        inputs.append(tsconfig)
+    # Location where we'll copy all the needed files for the ts compilation.
+    compilation_dir = ctx.label.name
+    # Compilation inputs
+    inputs = []
+    # Compilation outputs
+    outputs = []
 
-    compilation_dir = "package_" + ctx.label.name + ".tscompile"
-
-    node_modules = [] # list of output files (building a custom node_modules tree for the compilation)
+    # list of module output files (building a custom node_modules tree
+    # for the compilation)
+    node_modules = [] 
     for dep in ctx.attr.deps:
         node_modules += _build_node_module(ctx, compilation_dir, dep.node_module)
 
-    output_js_files = []
-    output_js_map_files = []
-    output_d_ts_files = []
-
-    srcs = []
+    # Copy the source files into the compilation dir.
+    srcs = [] 
     for src in ctx.files.srcs:
         copied_src = ctx.new_file("%s/%s" % (compilation_dir, src.short_path))
         ctx.action(
@@ -53,52 +84,51 @@ def _ts_module_impl(ctx):
         )
         srcs.append(copied_src)
 
+    # Generate a *.js, *.d.ts, and *.js.map file foreach source *.ts file.
     for src in srcs:
         inputs.append(src)
         basefile = src.short_path[0:-len(src.extension) - 1]
         if ctx.label.package:
             basefile = ctx.label.package + "/" + basefile
-        js_out = ctx.new_file("%s.js" % basefile)
-        output_js_files.append(js_out)
-        d_ts_out = ctx.new_file("%s.d.ts" % basefile)
-        output_d_ts_files.append(d_ts_out)
+        js_out = ctx.new_file("%s.js" % (basefile))
+        outputs.append(js_out)
+        d_ts_out = ctx.new_file("%s.d.ts" % (basefile))
+        outputs.append(d_ts_out)
         if (ctx.attr.sourcemap):
-            js_map_out = ctx.new_file("%s.js.map" % basefile)
-            output_js_map_files.append(js_map_out)
+            js_map_out = ctx.new_file("%s.js.map" % (basefile))
+            outputs.append(js_map_out)
 
+    # Generate a tsconfig.json file
+    tsconfig = _create_tsconfig(ctx, compilation_dir, srcs)
+
+    # Setup args for tsc
     arguments = [
-        tsc.path,
         "--moduleResolution", "node",
         "--declaration",
+        "--project", tsconfig.path,
     ] + ctx.attr.args
 
     if ctx.attr.sourcemap:
         arguments += ["--sourceMap"]
 
-    if tsconfig:
-        arguments += ["--project", tsconfig.path]
-
-    for src in srcs:
-        arguments.append(src.path)
-
-    outputs = output_js_files + output_d_ts_files + output_js_map_files
-
+    # Run the compilation
     ctx.action(
         mnemonic = "TypescriptCompile",
-        inputs = inputs + node_modules,
+        inputs = inputs + node_modules + [tsconfig],
         outputs = outputs,
-        executable = node,
+        executable = ctx.executable._tsc,
         arguments = arguments,
     )
 
     return struct(
-        files = depset(outputs),
+        files = depset(outputs + [tsconfig]),
         ts_module = struct(
             files = outputs,
             tsconfig = tsconfig,
-            srcs = ctx.files.srcs,
+            srcs = srcs,
         )
     )
+
 
 _ts_module = rule(
     implementation = _ts_module_impl,
@@ -110,41 +140,31 @@ _ts_module = rule(
         "deps": attr.label_list(
             providers = ["node_module"],
         ),
-        "tsconfig": attr.label(
-            allow_files = FileType(["tsconfig.json"]),
-            single_file = True,
-            mandatory = False,
-        ),
         "sourcemap": attr.bool(
             default = True,
         ),
         "args": attr.string_list(),
         "_tsc": attr.label(
-            default = "@yarn_modules//:tsc_bin",
-            executable = True,
-            cfg = "host",
-        ),
-        "_node": attr.label(
-            default = Label("@node//:node"),
-            single_file = True,
-            allow_files = True,
+            default = "@yarn_modules//:typescript_tsc_bin",
             executable = True,
             cfg = "host",
         ),
     },
 )
 
-def ts_module(name = None, srcs = [], tsconfig = None, deps = [], sourcemap = True, **kwargs):
+
+def ts_module(name = None, srcs = [], deps = [], **kwargs):
     _ts_module(
-        name = name + ".tsc",
+        name = name + "_ts",
         srcs = srcs,
-        tsconfig = tsconfig,
-        sourcemap = sourcemap,
         deps = deps,
     )
     node_module(
         name = name,
-        srcs = [name + ".tsc"],
+        srcs = [name + "_ts"],
         deps = deps,
+        # It's a bit of a hack to use the 'flat' layout here, but it
+        # makes the import of generated modules simpler.
+        layout = "flat",
         **kwargs
     )
