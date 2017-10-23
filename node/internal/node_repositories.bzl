@@ -1,4 +1,4 @@
-# The node_repository_impl taken from Alex Eagle's rules_nodejs :)
+# The node_repository_impl is mostly taken from rules_nodejs :)
 #
 # Copyright 2017 The Bazel Authors. All rights reserved.
 #

@@ -15,10 +15,11 @@
 | Rule | Description |
 | ---: | :---------- |
 | [node_repositories](#node_repositories) | Install node toolchain. |
-| [yarn_modules](#yarn_modules) | Install a set node_modules dependencies using yarn. |
-| [node_module](#node_module) | Define a node module from a set of source files and a main (or index) source file. |
-| [node_binary](#node_binary) | Build a node_modules tree and execute an entrypoint module script. |
-| [mocha_test](#mocha_test) |  Run a mocha test script. |
+| [yarn_modules](#yarn_modules) | Install a set node module dependencies using yarn. |
+| [node_module](#node_module) | Define a node module from a set of source files (having an optional main (or index) entry point). |
+| [node_binary](#node_binary) | Run a node module. |
+| [node_test](#node_test) | Run a node binary as a bazel test. |
+| [mocha_test](#mocha_test) | Run a mocha test script. |
 
 <table><tr>
 <td><img src="https://www.kernel.org/theme/images/logos/tux.png" height="48"/></td>
@@ -84,13 +85,14 @@ populate it with the necessary dependencies.
 3. Read the generated `yarn.lock` file, parse it, and write out a
    `@yarn_modules//:BUILD` file.  This file contains a `node_module`
    rule foreach entry in the `yarn.lock` file, a `node_module` rule
-   with the special name `_all_`, and an `sh_binary` rule foreach
+   with the special name `_all_`, and a `node_binary` rule foreach
    executable script in the `node_modules/.bin` folder.
 
 > Note 1: You can inspect all the targets by running `bazel query @yarn_modules//:*`.
 
 > Note 2: The workspace name `yarn_modules` is arbitrary, choose
-whatever you like *other than* `node_modules` (that one doesn't work).
+whatever you like (*other than* `node_modules` itself, that one
+doesn't work).
 
 At this point you can use these rule targets as `deps` for your
 `node_module` rules.  *Example*:
@@ -152,7 +154,7 @@ node_modules/fs-extra
 When used by other `node_module` rules, you can import the module as:
 
 ```javascript
-const myModule = require("my-module");
+const myModule = require("my_module");
 ```
 
 There are three basic ways to create a `node_module` rule:
@@ -249,6 +251,7 @@ These are only relevant if you don't explicitly name a `package.json` file.
 | optional | `string` | `url` | `None` | Url where the module tgz archive was resolved
 | optional | `string` | `sha1` | `None` | Sha1 hash of of the resolved tgz archive
 | optional | `string` | `description` | `None` | Module description
+| optional | `string_dict` | `executables` | `None` | A mapping from binary name to internal node module path.  Example `executables = { 'foo': 'bin/foo' }`.
 
 ### node_module attributes that affect the relative path of files included in the module
 
@@ -267,9 +270,7 @@ the workspace, which needs to be preserved in the generated module.
 
 ## node_binary
 
-The `node_binary` rule builds a `node_modules/` tree based on its
-`node_module` dependencies and writes a script to execute a module
-entrypoint.
+The `node_binary` rule writes a script to execute a module entrypoint.
 
 ```python
 load("@org_pubref_rules_node//node:rules.bzl", "node_binary")
@@ -299,37 +300,54 @@ the entrypoint (under the hood, it will just build a `node_module`
 becoming equivalent to the first example).
 
 
+```python
+node_binary(
+    name = "foo",
+    entrypoint = ":my_module_2",
+    executable = "baz",
+)
+```
+
+In this third example (above), we're specifying the name of the node
+module to start with (`my_module_2`) and the name of the executable
+within `my_module_2` to run (`baz`).  In this case the `node_module`
+rule definition for `my_module_2` must have a `string_dict` with an
+entry for `baz` (like `executables = { 'baz': 'bin/baz' }`.
+
 ### Output structure of files generated for a `node_binary` rule
 
-A  `node_binary` rule named `foo` will create a folder having exactly two entries:
+A `node_binary` rule named `foo` will create a folder having exactly
+two entries:
 
 1. An executable shell script named `foo`.
-1. A folder which bundles up all the needed files in `foo_bundle/`.
+1. A folder which bundles up all the needed files in `foo_files/`.
 
-Within `foo_bundle/`, there will also be exactly two entries:
+Within `foo_files/`, there will also be exactly two entries:
 
 1. The `node` executable itself.
-1. The `node_modules/` folder with all the built/copied modules.
-
-The bash shell script `foo` performs the following:
-
-`cd $(dirname $0)/foo_bundle && exec node node_modules/entrypoint`
+1. The `node_modules/` folder with all the built/copied modules
+   (including the entrypoint module).
 
 
 ### Building a deployable bundle
 
-To generate a tarred gzipped archive of the above example that you can
-ship as a single 'executable' file, invoke `$ bazel build
-:{target}_bundle.tgz`.  This is similar in intent to the java
+To generate a tarred/gzipped archive of the above example that you can
+ship as a single 'executable' self-contained package, invoke `$ bazel
+build :{target}_deploy.tar.gz`.  This is similar in intent to the java
 `{target}_deploy.jar` implicit build rule.
 
 ```sh
-$ bazel build :foo_bundle.tgz
-Target //:foo_bundle.tgz up-to-date:
+$ bazel build :foo_deploy
+Target //:foo_deploy.tar.gz up-to-date:
   bazel-bin/foo_bundle.tgz
 $ du -h bazel-bin/foo_bundle.tgz
 33M bazel-bin/foo_bundle.tgz
 ```
+
+## node_test
+
+The `node_test` rule is identical to node_binary, but sets the `test =
+True` flag such that it can be used as a bazel test.
 
 ## mocha_test
 
@@ -353,13 +371,9 @@ mocha_test(
     name = "test",
     main = "test.js",
 )
-
-mocha_test(
-    name = "test",
-    entrypoint = ":my_module",
-)
 ```
 
 ## Conclusion
 
-That's it!  Please refer to the various workspaces in `tests/` and the source for more detail.
+That's it!  Please refer to the various workspaces in `tests/` and the
+source for more detail.

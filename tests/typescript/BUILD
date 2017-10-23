@@ -58,12 +58,3 @@ sh_test(
     data = [":ts_report"],
 )
 
-
-# Note to self: genrule way to call typescript (too simple for real usage)
-# genrule(
-#     name = "tsc",
-#     srcs = ["hello.ts"],
-#     outs = ["hello.js"],
-#     cmd = "external/yarn_modules/node_modules/.bin/tsc --outDir $(@D) $(SRCS)",
-#     tools = ["@yarn_modules//:tsc"],
-# )

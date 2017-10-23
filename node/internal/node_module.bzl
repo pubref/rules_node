@@ -1,25 +1,34 @@
 _node_filetype = FileType([".js", ".node"])
 
+
 def _relname(ctx, root_file, file):
-    #print("getting relative name for %s rel %s" % (file.path, root_file.path))
-    # If file is in the workspace root, just return the name
-    if file.dirname == ".":
-        return file.short_path
-    parts = file.path.partition(root_file.dirname)
-    # If the file.path does not contain root_file.dirname, try the
-    # label.package...
-    if not len(parts[2]):
-        # However, if the label.package is empty, file is in the
-        # workspace root (so just use the basename)
-        if not ctx.label.package:
-            return file.basename
-        parts = file.path.partition(ctx.label.package)
-    if not len(parts[2]):
-        print("failed relative name for %s rel %s" % (file.path, root_file.path))
-    return parts[2]
+    """Get a path string relative to the root_file (usually the
+    package.json file of the module).
+
+    """
+
+    # For files that are in the external/ namespace, just slice off
+    # the root_file dirname.
+    if file.path.startswith("external/") and file.path.startswith(root_file.dirname):
+        rel = file.path[len(root_file.dirname):]
+        return rel
+
+    
+    if not file.short_path.startswith(ctx.label.package):
+        fail("_relname failed: %s must start with %s" % (file.short_path, ctx.label.package))
+
+    # All others, shave off the package label from the file's short
+    # path.
+    rel = file.short_path[len(ctx.label.package):] 
+    if rel.startswith('/'):
+        rel = rel[1:]
+
+    return rel
 
 
 def _get_package_dependencies(module_deps):
+    """ Create a mapping like { "underscore": "1.8.3", ... }
+    """
     dependencies = {}
     for dep in module_deps:
         module = dep.node_module
@@ -35,12 +44,12 @@ def _get_module_name(ctx):
     # else use the package name, but only if non-empty
     elif ctx.label.package:
         parts += ctx.label.package.split("/")
-    # finally, use the module_name or label name
+    # finally, add the module_name or label name
     parts.append(ctx.attr.module_name or ctx.label.name)
     return ctx.attr.separator.join(parts)
 
 
-def _create_package_json(ctx, name, files):
+def _create_package_json(ctx, name, files, executables):
     output_file = ctx.new_file("%s/package.json" % name)
 
     json = {
@@ -52,8 +61,11 @@ def _create_package_json(ctx, name, files):
     }
 
     if len(files) > 0:
-        json["files"] = list(depset([_get_path_for_module_file(ctx, output_file, file, {}) for file in files]))
+        json["files"] = depset([_get_path_for_module_file(ctx, output_file, file, {}) for file in files]).to_list()
 
+    if executables:
+        json["bin"] = executables
+        
     if ctx.attr.main:
         json["main"] = ctx.file.main.basename
 
@@ -78,7 +90,7 @@ def _get_transitive_modules(deps, key):
     for dep in deps:
         module = dep.node_module
         modules += [module]
-        modules += getattr(module, key)
+        modules += getattr(module, key, [])
     return modules
 
 
@@ -119,6 +131,8 @@ def _node_module_impl(ctx):
     if ctx.file.main:
         files.append(ctx.file.main)
 
+    executables = ctx.attr.executables
+        
     package_json = ctx.file.package_json
 
     # The presence of an index file suppresses creation of the
@@ -126,7 +140,7 @@ def _node_module_impl(ctx):
     # provided.
     if len(files) > 0 and not package_json:
         if ctx.attr.main or not ctx.file.index:
-            package_json = _create_package_json(ctx, name, files)
+            package_json = _create_package_json(ctx, name, files, executables)
     if package_json:
         outputs.append(package_json)
 
@@ -154,6 +168,7 @@ def _node_module_impl(ctx):
             url = ctx.attr.url,
             sha1 = ctx.attr.sha1,
             description = ctx.attr.description,
+            executables = executables,
             package_json = package_json,
             root = root_file,
             sourcemap = sourcemap,
@@ -198,7 +213,7 @@ node_module = rule(
         # File.short_path, causing them to be relative to the
         # WORKSPACE.
         "layout": attr.string(
-            values = ["relative", "workspace"],
+            values = ["relative", "workspace", "flat"],
             default = "relative",
         ),
 
@@ -232,6 +247,13 @@ node_module = rule(
             providers = ["node_module"],
         ),
 
+        # 'Binary' scripts, to be named in the 'package_json.bin'
+        # property.  This uses the plain 'string_dict' attribute since
+        # bazel does not have the more intuitive
+        # 'string_keyed_label_dict'-type attribute.
+        "executables": attr.string_dict(
+        ),
+
         # Module version
         "version": attr.string(
             default = "1.0.0",
@@ -254,7 +276,6 @@ node_module = rule(
         # File that should be named as the package.json 'main'
         # attribute.
         "main": attr.label(
-            #allow_files = _node_filetype,
             allow_files = True,
             mandatory = False,
             single_file = True,
