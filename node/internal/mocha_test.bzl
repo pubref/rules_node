@@ -40,13 +40,21 @@ def mocha_test(
         visibility = visibility,
         deps = deps + [name + "_module"],
     )
-        
+
+    entrypoint = [
+        "%s_modules" % name,
+        "node_modules"
+    ]
+    
+    if PACKAGE_NAME:
+        entrypoint.insert(0, PACKAGE_NAME)
+        entrypoint.append(PACKAGE_NAME)
+    entrypoint.append("%s_module" % name)
+    
     native.sh_test(
         name = name,
         srcs = [script],
-        args = args + [
-            "{name}_modules/node_modules/{name}_module".format(name = name),
-        ],
+        args = args + ["/".join(entrypoint)],
         data = [
             mocha_bin,
             name + "_modules",
