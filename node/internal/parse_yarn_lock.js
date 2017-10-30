@@ -354,7 +354,7 @@ function printNodeBinary(module, key, path) {
  * package json and return it as an object.
  */
 function parseNodeModulePackageJson(name) {
-  const module = require(`../node_modules/${name}/package`);
+  const module = require(`../node_modules/${name}/package.json`);
 
   // Take this opportunity to cleanup the module.bin entries
   // into a new Map called 'executables'
