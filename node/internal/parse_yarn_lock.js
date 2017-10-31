@@ -288,7 +288,11 @@ function printNodeModule(module) {
     
     print(`    version = "${module.version}",`);
     print(`    package_json = "node_modules/${module.name}/package.json",`);
-    print(`    srcs = glob(["node_modules/${module.name}/**/*"], exclude = ["node_modules/${module.name}/package.json"]),`);
+    // Exclude filenames with spaces: Bazel can't cope with them (we just have to hope they aren't needed later...)
+    print(`    srcs = glob(["node_modules/${module.name}/**/*"], exclude = [
+		"node_modules/${module.name}/package.json",
+		"**/* *",
+	]),`);
     if (url) {
       print(`    url = "${url}",`);
     }
