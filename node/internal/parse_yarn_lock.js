@@ -284,14 +284,15 @@ function printNodeModule(module) {
   print(``);
   printJson(module);
   print(`node_module(`);
-  print(`    name = "${module.name}",`);
+  print(`    name = "${module.yarn ? module.yarn.label : module.name}",`);
 
   // SCC pseudomodule wont have 'yarn' property
   if (module.yarn) {
     const url = module.yarn.url || module.url;
     const sha1 = module.yarn.sha1;
     const executables = module.executables;
-    
+
+    print(`    module_name = "${module.name}",`);
     print(`    version = "${module.version}",`);
     print(`    package_json = "node_modules/${module.name}/package.json",`);
     // Exclude filenames with spaces: Bazel can't cope with them (we just have to hope they aren't needed later...)
@@ -313,12 +314,12 @@ function printNodeModule(module) {
       }
       print(`    },`);
     }
-
   }
+
   if (deps && deps.size) {
     print(`    deps = [`);
     deps.forEach(dep => {
-      print(`        ":${dep.name}",`);
+      print(`        ":${dep.yarn ? dep.yarn.label : dep.name}",`);
     });
     print(`    ],`);
   }
@@ -337,7 +338,7 @@ function printNodeModuleAll(modules) {
   print(`    name = "_all_",`);
   print(`    deps = [`);
   modules.forEach(module => {
-    print(`        ":${module.name}",`);
+    print(`        ":${module.yarn ? module.yarn.label : module.name}",`);
   });
   print(`    ],`);
   print(`)`);
