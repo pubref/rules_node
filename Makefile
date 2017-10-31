@@ -16,7 +16,10 @@ test_typescript:
 test_webpack:
 	(cd tests/webpack && bazel test //...)
 
+test_polymer-cli:
+	(cd tests/polymer-cli && bazel test //...)
+
 test_mocha:
 	(cd tests/mocha && bazel test //...)
 
-test_all: test_helloworld test_lyrics test_express test_namespace test_typescript test_webpack test_mocha
+test_all: test_helloworld test_lyrics test_express test_namespace test_typescript test_webpack test_polymer-cli test_mocha
