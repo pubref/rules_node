@@ -19,4 +19,7 @@ test_webpack:
 test_mocha:
 	(cd tests/mocha && bazel test //...)
 
-test_all: test_helloworld test_lyrics test_express test_namespace test_typescript test_webpack test_mocha
+test_protobuf_js:
+	(cd tests/protobuf.js && bazel test //...)
+
+test_all: test_helloworld test_lyrics test_express test_namespace test_typescript test_webpack test_mocha test_protobuf_js
