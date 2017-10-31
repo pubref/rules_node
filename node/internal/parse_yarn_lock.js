@@ -208,9 +208,10 @@ function breakCircularDependencies(modules) {
           }
         });
 
-        // Each entry in the cluster must have no other outgoing
-        // dependencies
-        entry.deps = new Set();
+        // Each entry in the cluster must have no connections to other
+        // dependencies in the cluster, or on the cluster pseudo-dep
+        pseudo.deps.forEach(circ => entry.deps.delete(circ));
+        entry.deps.delete(pseudo);
       });
 
       // Store this new pseudo-module in the modules list
