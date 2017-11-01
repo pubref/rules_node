@@ -1,3 +1,3 @@
-const protobuf = require('protobuf.js');
+const protobuf = require('protobufjs');
 
 console.log('SUCCESS');

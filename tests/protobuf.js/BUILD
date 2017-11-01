@@ -6,7 +6,7 @@ node_binary(
     name = "app",
     main = "app.js",
     deps = [
-        "@yarn_modules//:protobuf.js",
+        "@yarn_modules//:protobufjs",
     ],
 )
 
