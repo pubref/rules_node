@@ -28,7 +28,7 @@ def create_launcher(ctx, output_dir, node, manifest):
     # The package path is the path 
     package_path = []
     if ctx.label.workspace_root:
-        package_path.append(ctx.label.workspace_root)
+        package_path.append(ctx.label.workspace_root.replace("external/", "", 1))
     if ctx.label.package:
         package_path.append(ctx.label.package)
     
@@ -52,24 +52,30 @@ def create_launcher(ctx, output_dir, node, manifest):
         # Namespace where node and node_modules assets have been
         # built.
         'TARGET_NAME="%s"' % ctx.attr.target,
+        # Workspace name where this rule is defined
+        'WORKSPACE_NAME="%s"' % ctx.workspace_name,
         # Based on the way the script has been invoked, $PACKAGE_PATH
         # can exist in various locations.  We need to discover this
         # and assign the value to $TARGET_PATH.
         'TARGET_PATH=""' ,
 
         'ENTRYPOINT="%s"' % entrypoint,
-        
+
         'if [[ -e "${0}_files/${NODE_EXE}" ]]; then',
         '  TARGET_PATH="${0}_files/"',
         #'  echo "Matched [standalone script] or [bazel test] context [${TARGET_PATH}]"',
         '',
-        'elif [[ -e "${0}_files/${NODE_EXE}" ]]; then',
-        '  TARGET_PATH="${0}_files/"',
-        #'  echo "Matched [standalone script] or [bazel test] context [${TARGET_PATH}]"',
-        '',
         'elif [[ -e "${0}.runfiles/__main__/${PACKAGE_PATH}/${TARGET_NAME}/${NODE_EXE}" ]]; then',
-        '  TARGET_PATH="${0}.runfiles/__main__/${PACKAGE_PATH}/${TARGET_NAME}/"', 
+        '  TARGET_PATH="${0}.runfiles/__main__/${PACKAGE_PATH}/${TARGET_NAME}/"',
         #'  echo "Matched [bazel run] context [${TARGET_PATH}]"',
+        '',
+        'elif [[ -e "${0}.runfiles/${WORKSPACE_NAME}/${PACKAGE_PATH}/${TARGET_NAME}/${NODE_EXE}" ]]; then',
+        '  TARGET_PATH="${0}.runfiles/${WORKSPACE_NAME}/${PACKAGE_PATH}/${TARGET_NAME}/"',
+        #'  echo "Matched [bazel build] or [bazel run] context in a named workspace [${TARGET_PATH}]"',
+        '',
+        'elif [[ -e "${0}.runfiles/${PACKAGE_PATH}/${TARGET_NAME}/${NODE_EXE}" ]]; then',
+        '  TARGET_PATH="${0}.runfiles/${PACKAGE_PATH}/${TARGET_NAME}/"',
+        #'  echo "Matched [bazel build] context [${TARGET_PATH}]"',
         '',
         'elif [[ -e "${PACKAGE_PATH}/${TARGET_NAME}/${NODE_EXE}" ]]; then',
         '  TARGET_PATH="${PACKAGE_PATH}/${TARGET_NAME}/"',
