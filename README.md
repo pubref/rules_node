@@ -20,6 +20,7 @@
 | [node_binary](#node_binary) | Run a node module. |
 | [node_test](#node_test) | Run a node binary as a bazel test. |
 | [mocha_test](#mocha_test) | Run a mocha test script. |
+| [node_proto_module](#node_proto_module) | Define a node module by generating JavaScript code from a set of .proto files.
 
 <table><tr>
 <td><img src="https://www.kernel.org/theme/images/logos/tux.png" height="48"/></td>
@@ -372,6 +373,47 @@ mocha_test(
     main = "test.js",
 )
 ```
+
+## node_proto_library
+
+Define a node module by generating JavaScript code from a set of .proto files given in `srcs`. One 
+file is generated for each `src` in the `srcs` list as `src_pb.js`. The output is a 
+[node_module](#node_module) with the generated files in the root of the module.
+
+> Note: The node_proto_library rule depends on `@com_google_protobuf//:protoc` and
+> `@protobuf_modules//:_all_`, so you'll need to add these dependencies to your `WORKSPACE` file:
+
+```python
+http_archive(
+    name = "com_google_protobuf",
+    urls = ["https://github.com/google/protobuf/archive/v3.4.0.zip"],
+    strip_prefix = "protobuf-3.4.0",
+    sha256 = "542703acadc3f690d998f4641e1b988f15ba57ebca05fdfb1cd9095bec007948"
+)
+
+yarn_modules(
+    name = "protobuf_modules",
+    deps = {
+        "mocha": "3.4.0"
+    }
+)
+```
+
+```python
+node_proto_library(
+    name = "foo",
+    srcs = ["foo.proto"]
+)
+```
+
+#### Options
+
+|  | Type | Name | Default | Description |
+| ---: | :--- | :--- | :--- | :--- |
+| optional | `boolean` | `binary` | `True` | Set `--js_out=binary` for `protoc`
+| optional | `boolean` | `descriptor` | `False` | Write out the protobuf descriptor file as `name.descriptor`
+| optional | `Label` | `protobuf_modules` | `@protobuf_modules//:_all_` | [yarn_modules](#yarn_modules) containing the protobuf dependency `"google-protobuf": "3.4.0"`
+| optional | `Label` | `protocbin` | `@com_google_protobuf//:protoc` | Protobuf `protoc` compiler
 
 ## Conclusion
 

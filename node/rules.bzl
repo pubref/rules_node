@@ -6,4 +6,4 @@ load("//node:internal/node_binary.bzl", "node_binary")
 load("//node:internal/node_binary.bzl", "node_test")
 load("//node:internal/node_bundle.bzl", "node_bundle")
 load("//node:internal/mocha_test.bzl", "mocha_test")
-                                        
+load("//node:internal/node_proto_module.bzl", "node_proto_module")
