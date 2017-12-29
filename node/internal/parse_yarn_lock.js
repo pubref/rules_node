@@ -26,19 +26,19 @@ function main() {
   //
   const entries = Object.keys(yarn.object).map(key => makeYarnEntry(key, yarn.object[key]));
 
-  // For all top-level folders in the node_modules directory that
-  // contain a package.json file...
-  const getModulesIn = p => fs.readdirSync(p)
-        .filter(f =>
-                fs.statSync(path.join(p, f)).isDirectory() &&
-                fs.existsSync(path.join(p, f, 'package.json')) &&
-                fs.statSync(path.join(p, f, 'package.json')).isFile());
+  // Scan the node_modules directory and find all top-level ('foo') or scoped (@bar/baz)
+  // modules, i.e. folders which contain a package.json file...
+  const getModulesIn = p => fs.readdirSync(p).filter(f => isPackage(p, undefined, f));
+  const findScopes = p => fs.readdirSync(p).filter(f => f.startsWith("@") && fs.statSync(path.join(p, f)).isDirectory());
+  const getModulesInScope = (p, s) => fs.readdirSync(path.join(p, s)).filter(f => isPackage(p, s, f));
 
-  // ... parse ithem 
-  const modules = getModulesIn('node_modules').map(dir => parseNodeModulePackageJson(dir));
+  // ...then parse the package.json files to collect the metadata
+  let topLevelModuleDirs = getModulesIn('node_modules');
+  let scopeModuleDirs = findScopes('node_modules').map(scope => getModulesInScope('node_modules', scope).map(m => scope+'/'+m)).reduce((a, b) => a.concat(b), []);
+  let moduleDirs = topLevelModuleDirs.concat(scopeModuleDirs);
+  const modules = moduleDirs.map(dir => parseNodeModulePackageJson(dir));
 
-  // Iterate all the modules and merge the information from yarn into
-  // the module
+  // Iterate all the modules and merge the information from yarn into the module
   modules.forEach(module => mergePackageJsonWithYarnEntry(entries, module));
 
   // Didn't realize that the nodejs module ecosystem can contain
@@ -68,6 +68,12 @@ function main() {
   print("# EOF");
 }
 
+function isPackage(p, s, f) {
+  let dir = s ? path.join(p, s, f) : path.join(p, f);
+  return fs.statSync(dir).isDirectory() &&
+    fs.existsSync(path.join(dir, 'package.json')) &&
+    fs.statSync(path.join(dir, 'package.json')).isFile()
+}
 
 /**
  * Given a list of yarn entries and a target module, find an exact
@@ -202,9 +208,10 @@ function breakCircularDependencies(modules) {
           }
         });
 
-        // Each entry in the cluster must have no other outgoing
-        // dependencies
-        entry.deps = new Set();
+        // Each entry in the cluster must have no connections to other
+        // dependencies in the cluster, or on the cluster pseudo-dep
+        pseudo.deps.forEach(circ => entry.deps.delete(circ));
+        entry.deps.delete(pseudo);
       });
 
       // Store this new pseudo-module in the modules list
@@ -278,17 +285,22 @@ function printNodeModule(module) {
   print(``);
   printJson(module);
   print(`node_module(`);
-  print(`    name = "${module.name}",`);
+  print(`    name = "${module.yarn ? module.yarn.label : module.name}",`);
 
   // SCC pseudomodule wont have 'yarn' property
   if (module.yarn) {
     const url = module.yarn.url || module.url;
     const sha1 = module.yarn.sha1;
     const executables = module.executables;
-    
+
+    print(`    module_name = "${module.name}",`);
     print(`    version = "${module.version}",`);
     print(`    package_json = "node_modules/${module.name}/package.json",`);
-    print(`    srcs = glob(["node_modules/${module.name}/**/*"], exclude = ["node_modules/${module.name}/package.json"]),`);
+    // Exclude filenames with spaces: Bazel can't cope with them (we just have to hope they aren't needed later...)
+    print(`    srcs = glob(["node_modules/${module.name}/**/*"], exclude = [
+		"node_modules/${module.name}/package.json",
+		"**/* *",
+	]),`);
     if (url) {
       print(`    url = "${url}",`);
     }
@@ -303,12 +315,12 @@ function printNodeModule(module) {
       }
       print(`    },`);
     }
-
   }
+
   if (deps && deps.size) {
     print(`    deps = [`);
     deps.forEach(dep => {
-      print(`        ":${dep.name}",`);
+      print(`        ":${dep.yarn ? dep.yarn.label : dep.name}",`);
     });
     print(`    ],`);
   }
@@ -327,7 +339,7 @@ function printNodeModuleAll(modules) {
   print(`    name = "_all_",`);
   print(`    deps = [`);
   modules.forEach(module => {
-    print(`        ":${module.name}",`);
+    print(`        ":${module.yarn ? module.yarn.label : module.name}",`);
   });
   print(`    ],`);
   print(`)`);
