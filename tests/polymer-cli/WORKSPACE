@@ -13,5 +13,6 @@ yarn_modules(
     name = "yarn_modules",
     deps = {
         "polymer-cli": "1.5.7",
+        "update-notifier": "1.0.3",
     },
 )
