@@ -8,7 +8,7 @@
 <td>Yarn</td>
 </tr></table>
 
-# `rules_node` [![Build Status](https://travis-ci.org/pubref/rules_node.svg?branch=master)](https://travis-ci.org/pubref/rules_node)
+# `rules_node` [![Build Status](https://cirrus-ci.com/github/pubref/rules_node.svg?branch=master)](https://cirrus-ci.com/github/pubref/rules_node) [![Build Status](https://travis-ci.org/pubref/rules_node.svg?branch=master)](https://travis-ci.org/pubref/rules_node)
 
 # Rules
 

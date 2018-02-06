@@ -1,0 +1,12 @@
+test_task:
+  container:
+    matrix:
+      image: cirrusci/bazel:0.7.0
+      image: cirrusci/bazel:0.6.1
+      image: cirrusci/bazel:0.5.4
+      image: cirrusci/bazel:0.5.3
+    cpu: 4
+    memory: 12G
+  configure_script: |
+    - echo "buils --spawn_strategy=remote --genrule_strategy=remote --remote_rest_cache=http://$CIRRUS_HTTP_CACHE_HOST" | sudo tee /etc/bazel.bazelrc
+  test_all_script: make test_all
