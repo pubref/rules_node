@@ -55,10 +55,17 @@ def _yarn_modules_impl(ctx):
     execute(ctx, ["cp", parse_yarn_lock_js, "internal/parse_yarn_lock.js"])
     execute(ctx, ["cp", yarn_js, "yarn.js"])
 
+    install_path = [node.dirname]
+    for tool in ctx.attr.install_tools:
+        tool_path = ctx.which(tool)
+        if not tool_path:
+            fail("Required install tool '%s' is not in the PATH" % tool, "install_tools")
+        install_path.append(tool_path.dirname)
+    install_path.append("$PATH")
+    
     # Build node_modules via 'yarn install'
     execute(ctx, [node, yarn_js, "install"], quiet = True, environment = {
-        # postinstall scripts may need to find the node binary
-        "PATH": "%s:$PATH" % ctx.path(node).dirname,
+        "PATH": ":".join(install_path),
     })
 
     # Run the script and save the stdout to our BUILD file(s)
@@ -93,6 +100,9 @@ yarn_modules = repository_rule(
             default = Label("@yarn//:bin/yarn.js"),
             single_file = True,
         ),
+        # If specififed, augment the PATH environment variable with these
+        # tools during 'yarn install'.  
+        "install_tools": attr.string_list(),
         "package_json": attr.label(
             mandatory = False,
             allow_files = FileType(["package.json"]),
