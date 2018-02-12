@@ -32,6 +32,7 @@ def _yarn_modules_impl(ctx):
     node = ctx.path(node_label)
 
     parse_yarn_lock_js = ctx.path(ctx.attr._parse_yarn_lock_js)
+    clean_node_modules_js = ctx.path(ctx.attr._clean_node_modules_js)
     yarn_js = ctx.path(ctx.attr._yarn_js)
 
 
@@ -53,6 +54,7 @@ def _yarn_modules_impl(ctx):
         
     # Copy the parse_yarn_lock script and yarn.js over here.
     execute(ctx, ["cp", parse_yarn_lock_js, "internal/parse_yarn_lock.js"])
+    execute(ctx, ["cp", clean_node_modules_js, "internal/clean_node_modules.js"])
     execute(ctx, ["cp", yarn_js, "yarn.js"])
 
     install_path = [node.dirname]
@@ -68,9 +70,32 @@ def _yarn_modules_impl(ctx):
         "PATH": ":".join(install_path),
     })
 
+    # Sadly, pre-existing BUILD.bazel files located in npm modules can
+    # screw up package boudaries.  Remove these.
+    execute(ctx, [node, "internal/clean_node_modules.js"], quiet = True)
+    
     # Run the script and save the stdout to our BUILD file(s)
     parse_args = ["--resolve=%s:%s" % (k, v) for k, v in ctx.attr.resolutions.items()]
     result = execute(ctx, [node, "internal/parse_yarn_lock.js"] + parse_args, quiet = True)
+
+    # If the user has specified a post_install step, build those args
+    # and execute it.
+    post_install_args = []
+    for arg in ctx.attr.post_install:
+        if arg == "{node}":
+            post_install_args.append(node)
+        else:
+            post_install_args.append(arg)
+    if len(post_install_args) > 0:
+        # Expose python, node, and basic tools by default.  Might need
+        # to add a post_install_tools option in the future if this is
+        # not sufficient.
+        python = ctx.which("python")
+        mkdir = ctx.which("mkdir")
+        execute(ctx, post_install_args, environment = {
+            "PATH": ":".join([node.dirname, python.dirname, mkdir.dirname, "$PATH"])
+        })
+
     ctx.file("BUILD.bazel", result.stdout)
 
 
@@ -96,6 +121,10 @@ yarn_modules = repository_rule(
             default = Label("//node:internal/parse_yarn_lock.js"),
             single_file = True,
         ),
+        "_clean_node_modules_js": attr.label(
+            default = Label("//node:internal/clean_node_modules.js"),
+            single_file = True,
+        ),
         "_yarn_js": attr.label(
             default = Label("@yarn//:bin/yarn.js"),
             single_file = True,
@@ -107,6 +136,7 @@ yarn_modules = repository_rule(
             mandatory = False,
             allow_files = FileType(["package.json"]),
         ),
+        "post_install": attr.string_list(),
         "deps": attr.string_dict(mandatory = False),
         "resolutions": attr.string_dict(mandatory = False),
     }

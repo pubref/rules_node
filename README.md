@@ -114,6 +114,7 @@ node_module(
 | --- | --- | --- | --- |
 | optional | `label` | `package_json` | A `package.json` file containing the dependencies that should be installed. |
 | optional | `string_dict` | `deps` | A mapping of `name` --> `version` for the dependencies that should be installed. |
+| optional | `string_list` | `post_install` | A list of command-line arguments that should be invoked after the `yarn install` step.  See [#55](https://github.com/pubref/rules_node/issues/55). |
 
 > Either `package_json` or `deps` must be present, but not both.
 
