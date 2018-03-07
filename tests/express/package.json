@@ -2,6 +2,7 @@
     "name": "server",
     "version": "1.0.0",
     "dependencies": {
-        "express": "4.15.4"
+        "express": "4.15.4",
+        "express-session": "git+https://git@github.com/expressjs/session#v1.15.6"
     }
 }

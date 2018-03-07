@@ -76,8 +76,8 @@ function isPackage(p, s, f) {
 }
 
 /**
- * Given a list of yarn entries and a target module, find an exact
- * match by name and version.
+ * Given a list of yarn entries and a target module, find an exact match by name
+ * and version.
  */
 function findMatchingYarnEntryByNameAndVersion(entries, module) {
   for (let i = 0; i < entries.length; i++) {
@@ -237,9 +237,13 @@ function makeYarnEntry(key, entry) {
  * Parse a yarn name into something that will be agreeable to bazel.
  */
 function parseName(key, entry) {
-  // can be 'foo@1.0.0' or something like '@types/foo@1.0.0'
-  const at = key.lastIndexOf('@');
   entry.id = key;
+
+  // can be 'foo@1.0.0' or something like '@types/foo@1.0.0'
+  // or even something like @types/foo@https://git@github.com/pkg#mod.
+  // TODO: Regexes would be better here to support more package.json dependency
+  // formats: https://docs.npmjs.com/files/package.json#dependencies
+  const at = key.indexOf("@", 1);
   entry.name = key.slice(0, at);
 
   const label = entry.name.replace('@', 'at-');
