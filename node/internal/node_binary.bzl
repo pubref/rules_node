@@ -88,6 +88,7 @@ def create_launcher(ctx, output_dir, node, manifest):
 
         '# Modify path such that embedded scripts with /usr/bin/env node shebangs',
         '# resolve to the bundled node executable',
+        'export NODE_PATH="${TARGET_PATH}/node_modules"',
         'export PATH="${TARGET_PATH}:$PATH"',
 
         ' '.join(cmd)
