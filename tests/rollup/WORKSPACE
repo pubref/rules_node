@@ -1,0 +1,18 @@
+local_repository(
+    name = "org_pubref_rules_node",
+    path = "../..",
+)
+
+load("@org_pubref_rules_node//node:rules.bzl", "node_repositories", "yarn_modules")
+
+node_repositories()
+
+yarn_modules(
+    name = "yarn_modules",
+    deps = {
+        "rollup": "0.56.5",
+        # rollup-plugin-buble is simply an external node module to the
+        # rollup binary that will be required at runtime.
+        "rollup-plugin-buble": "0.19.2",
+    }
+)
