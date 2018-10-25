@@ -159,6 +159,10 @@ def _node_module_impl(ctx):
         dst = ctx.new_file("%s/%s" % (name, _get_path_for_module_file(ctx, root_file, src, sourcemap)))
         outputs.append(_copy_file(ctx, src, dst))
 
+    for src in ctx.files.data:
+        dst = ctx.new_file("%s/%s" % (name, src.short_path))
+        outputs.append(_copy_file(ctx, src, dst))
+
     return struct(
         files = depset(outputs),
         node_module = struct(
