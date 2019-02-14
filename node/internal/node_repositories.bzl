@@ -14,6 +14,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+load("@bazel_tools//tools/build_defs/repo:http.bzl", "http_archive")
+
 """Install NodeJS when the user runs node_repositories() from their WORKSPACE.
 
 We fetch a specific version of Node, to ensure builds are hermetic.
@@ -105,7 +107,7 @@ def node_repositories(yarn_version="v1.0.1",
                       yarn_sha256="6b00b5e0a7074a512d39d2d91ba6262dde911d452617939ca4be4a700dd77cf1",
                       **kwargs):
 
-    native.new_http_archive(
+    http_archive(
       name = "yarn",
       url = "https://github.com/yarnpkg/yarn/releases/download/{yarn_version}/yarn-{yarn_version}.tar.gz".format(
         yarn_version = yarn_version,
@@ -115,7 +117,7 @@ def node_repositories(yarn_version="v1.0.1",
       build_file_content = YARN_BUILD_FILE_CONTENT,
     )
 
-    native.new_http_archive(
+    http_archive(
       name = "yarnpkg_lockfile",
       url = "https://registry.yarnpkg.com/@yarnpkg/lockfile/-/lockfile-1.0.0.tgz",
       sha256 = "472add7ad141c75811f93dca421e2b7456045504afacec814b0565f092156250",
