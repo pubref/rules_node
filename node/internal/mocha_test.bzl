@@ -26,7 +26,7 @@ def mocha_test(
     executable with the name of the testable entrypoint module.
 
     """
-    
+
     node_module(
         name = name + "_module",
         main = main,
@@ -45,12 +45,12 @@ def mocha_test(
         "%s_modules" % name,
         "node_modules"
     ]
-    
-    if PACKAGE_NAME:
-        entrypoint.insert(0, PACKAGE_NAME)
-        entrypoint.append(PACKAGE_NAME)
+
+    if native.package_name():
+        entrypoint.insert(0, native.package_name())
+        entrypoint.append(native.package_name())
     entrypoint.append("%s_module" % name)
-    
+
     native.sh_test(
         name = name,
         srcs = [script],
