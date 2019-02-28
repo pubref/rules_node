@@ -46,9 +46,9 @@ def mocha_test(
         "node_modules"
     ]
     
-    if PACKAGE_NAME:
-        entrypoint.insert(0, PACKAGE_NAME)
-        entrypoint.append(PACKAGE_NAME)
+    if native.package_name():
+        entrypoint.insert(0, native.package_name())
+        entrypoint.append(native.package_name())
     entrypoint.append("%s_module" % name)
     
     native.sh_test(
