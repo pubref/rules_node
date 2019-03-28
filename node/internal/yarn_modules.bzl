@@ -43,7 +43,7 @@ def _yarn_modules_impl(ctx):
         sha256 = "472add7ad141c75811f93dca421e2b7456045504afacec814b0565f092156250",
         stripPrefix = "package",
     )
-    
+
     # Copy over or create the package.json file
     if ctx.attr.package_json:
         package_json_file = ctx.path(ctx.attr.package_json)
@@ -51,7 +51,7 @@ def _yarn_modules_impl(ctx):
     else:
         ctx.file("package.json", _create_package_json_content(ctx).to_json())
 
-        
+
     # Copy the parse_yarn_lock script and yarn.js over here.
     execute(ctx, ["cp", parse_yarn_lock_js, "internal/parse_yarn_lock.js"])
     execute(ctx, ["cp", clean_node_modules_js, "internal/clean_node_modules.js"])
@@ -64,7 +64,7 @@ def _yarn_modules_impl(ctx):
             fail("Required install tool '%s' is not in the PATH" % tool, "install_tools")
         install_path.append(tool_path.dirname)
     install_path.append("$PATH")
-    
+
     # Build node_modules via 'yarn install'
     execute(ctx, [node, yarn_js, "install"], quiet = True, environment = {
         "PATH": ":".join(install_path),
@@ -73,7 +73,7 @@ def _yarn_modules_impl(ctx):
     # Sadly, pre-existing BUILD.bazel files located in npm modules can
     # screw up package boudaries.  Remove these.
     execute(ctx, [node, "internal/clean_node_modules.js"], quiet = True)
-    
+
     # Run the script and save the stdout to our BUILD file(s)
     parse_args = ["--resolve=%s:%s" % (k, v) for k, v in ctx.attr.resolutions.items()]
     result = execute(ctx, [node, "internal/parse_yarn_lock.js"] + parse_args, quiet = True)
@@ -130,11 +130,11 @@ yarn_modules = repository_rule(
             single_file = True,
         ),
         # If specififed, augment the PATH environment variable with these
-        # tools during 'yarn install'.  
+        # tools during 'yarn install'.
         "install_tools": attr.string_list(),
         "package_json": attr.label(
             mandatory = False,
-            allow_files = FileType(["package.json"]),
+            allow_files = ["package.json"],
         ),
         "post_install": attr.string_list(),
         "deps": attr.string_dict(mandatory = False),

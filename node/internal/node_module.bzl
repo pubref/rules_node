@@ -1,4 +1,4 @@
-_node_filetype = FileType([".js", ".node"])
+_node_filetype = [".js", ".node"]
 
 
 def _relname(ctx, root_file, file):
@@ -226,7 +226,7 @@ node_module = rule(
         # the module.  If not present, one will be generated UNLESS an
         # index file is provided.
         "package_json": attr.label(
-            allow_files = FileType(["package.json"]),
+            allow_files = ["package.json"],
             single_file = True,
         ),
 
