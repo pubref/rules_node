@@ -1,4 +1,4 @@
-_node_filetype = FileType([".js", ".node"])
+_node_filetype = [".js", ".node"]
 
 
 def _relname(ctx, root_file, file):
@@ -13,13 +13,13 @@ def _relname(ctx, root_file, file):
         rel = file.path[len(root_file.dirname):]
         return rel
 
-    
+
     if not file.short_path.startswith(ctx.label.package):
         fail("_relname failed: %s must start with %s" % (file.short_path, ctx.label.package))
 
     # All others, shave off the package label from the file's short
     # path.
-    rel = file.short_path[len(ctx.label.package):] 
+    rel = file.short_path[len(ctx.label.package):]
     if rel.startswith('/'):
         rel = rel[1:]
 
@@ -65,7 +65,7 @@ def _create_package_json(ctx, name, files, executables):
 
     if executables:
         json["bin"] = executables
-        
+
     if ctx.attr.main:
         json["main"] = ctx.file.main.basename
 
@@ -132,7 +132,7 @@ def _node_module_impl(ctx):
         files.append(ctx.file.main)
 
     executables = ctx.attr.executables
-        
+
     package_json = ctx.file.package_json
 
     # The presence of an index file suppresses creation of the
@@ -226,7 +226,7 @@ node_module = rule(
         # the module.  If not present, one will be generated UNLESS an
         # index file is provided.
         "package_json": attr.label(
-            allow_files = FileType(["package.json"]),
+            allow_files = ["package.json"],
             single_file = True,
         ),
 
@@ -234,7 +234,6 @@ node_module = rule(
         # excluded from the package.json 'files' attribute.
         "data": attr.label_list(
             allow_files = True,
-            cfg = "data",
         ),
 
         # Module dependencies.
