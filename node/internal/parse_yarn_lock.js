@@ -39,7 +39,7 @@ function main() {
   const modules = moduleDirs.map(dir => parseNodeModulePackageJson(dir));
 
   // Iterate all the modules and merge the information from yarn into the module
-  modules.forEach(module => mergePackageJsonWithYarnEntry(entries, module));
+  modules.forEach(mod => mergePackageJsonWithYarnEntry(entries, mod));
 
   // Didn't realize that the nodejs module ecosystem can contain
   // circular references, but apparently it can.
@@ -94,17 +94,17 @@ function findMatchingYarnEntryByNameAndVersion(entries, module) {
  * Actually, this is pretty simple as the yarn entry is simply
  * attached to the module.
  */
-function mergePackageJsonWithYarnEntry(entries, module) {
-  const entry = findMatchingYarnEntryByNameAndVersion(entries, module);
+function mergePackageJsonWithYarnEntry(entries, mod) {
+  const entry = findMatchingYarnEntryByNameAndVersion(entries, mod);
   if (!entry) {
-    throw new Error("No matching node_module found for " + module.name);
+    throw new Error("No matching node_module found for this module", mod);
   }
 
   // Use the bazelified name as the module name
-  module.original_name = module.name
-  module.name = entry.name
+  mod.original_name = mod.name
+  mod.name = entry.name
   // Store everything else here
-  module.yarn = entry;
+  mod.yarn = entry;
 }
 
 /**
@@ -117,30 +117,31 @@ function mergePackageJsonWithYarnEntry(entries, module) {
 function breakCircularDependencies(modules) {
 
   const byName = new Map();
-  modules.forEach(module => byName.set(module.name, module));
+  modules.forEach(mod => byName.set(mod.name, mod));
   
   // Make a list of nodes 
   const nodes = Array.from(byName.keys());
   // An Array<Array<number>> array for the edges
   const edges = [];
-  // And a mapping for backreferences mapped by name
-  const backrefs = new Map();
 
   // Build the adjacencyList
   nodes.forEach((node, index) => {
     const list = [];
     edges[index] = list;
-    const entry = byName.get(node);
+    const entry = byName.get(node); // get the module by name
     // Make a set of deps rather than using the entry.dependencies
     // mapping.
     entry.deps = new Set();
     
     if (entry.dependencies) {
-      
+
       Object.keys(entry.dependencies).forEach(name => {
 
         // Save this in the deps set
         const dependency = byName.get(name);
+        if (!dependency) {
+          throw new ReferenceError(`# For module ${entry.name} ${entry.version}: for some reason the module for transitive dependency ${name} was not included.  Please add it manually to your list of top-level dependencies (rule yarn_modules.deps attribute) .`);
+        }
         entry.deps.add(dependency);
         
         // Populate the adjacency list
@@ -370,23 +371,23 @@ function printNodeBinary(module, key, path) {
  * package json and return it as an object.
  */
 function parseNodeModulePackageJson(name) {
-  const module = require(`../node_modules/${name}/package.json`);
+  const mod = require(`../node_modules/${name}/package.json`);
 
   // Take this opportunity to cleanup the module.bin entries
   // into a new Map called 'executables'
-  const executables = module.executables = new Map();
-  
-  if (Array.isArray(module.bin)) {
+  const executables = mod.executables = new Map();
+
+  if (Array.isArray(mod.bin)) {
     // should not happen, but ignore it if present
-  } else if (typeof module.bin === 'string') {
-    executables.set(name, stripBinPrefix(module.bin));
-  } else if (typeof module.bin === 'object') {
-    for (let key in module.bin) {
-      executables.set(key, stripBinPrefix(module.bin[key]));
+  } else if (typeof mod.bin === 'string') {
+    executables.set(name, stripBinPrefix(mod.bin));
+  } else if (typeof mod.bin === 'object') {
+    for (let key in mod.bin) {
+      executables.set(key, stripBinPrefix(mod.bin[key]));
     }
   }
 
-  return module;  
+  return mod;  
 }
 
 /**

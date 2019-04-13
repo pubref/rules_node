@@ -12,7 +12,7 @@ breaks this strongly connected component into a separate pseudo
 
 ```sh
 # Should be able to run webpack directly
-$ bazel build @yarn_modules//:webback_bin -- --help
+$ bazel run @yarn_modules//:webpack_bin -- --help
 
 # Should be able to invoke webpack as standalone script 
 $ ./bazel-bin/external/yarn_modules/webpack_bin --help

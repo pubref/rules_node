@@ -134,7 +134,7 @@ _ts_module = rule(
     implementation = _ts_module_impl,
     attrs = {
         "srcs": attr.label_list(
-            allow_files = FileType([".ts", ".tsx"]),
+            allow_files = [".ts", ".tsx"],
             mandatory = True,
         ),
         "deps": attr.label_list(

@@ -11,6 +11,7 @@ yarn_modules(
     name = "yarn_modules",
     deps = {
         "webpack": "3.4.0",
+        "yallist": "2.1.2",
     },
     resolutions = {
         "acorn": "5.1.2",
