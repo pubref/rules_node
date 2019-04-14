@@ -88,23 +88,23 @@ _node_repository = repository_rule(
   _node_repository_impl,
   attrs = {
     "node_version": attr.string(
-      default = "7.10.1",
+      default = "8.15.1",
     ),
     "linux_sha256": attr.string(
-      default = "7b0e9d1af945671a0365a64ee58a2b0d72b3632a1cebe6b5bd75094b93627bf3",
+      default = "5643b54c583eebaa40c1623b16cba4e3955ff5dfdd44036f6bafd761160c993d",
     ),
     "darwin_sha256": attr.string(
-      default = "d67d2eb9456aab925416ad58aa18b9680e66a4bcc243a89b22e646f7fffc4ff9",
+      default = "aacdc9d5d8bbeaf47c398815147e052aac53cf19319f4c140c1798a82d419e65",
     ),
     "windows_sha256": attr.string(
-      default = "617590f06f9a0266ceecb3fd17120fc2fbf8669980974f339a83f3b56ed05f7b",
+      default = "f636fa578dc079bacc6c4bef13284ddb893c99f7640b96701c2690bd9c1431f5",
     ),
   },
 )
 
 
-def node_repositories(yarn_version="v1.0.1",
-                      yarn_sha256="6b00b5e0a7074a512d39d2d91ba6262dde911d452617939ca4be4a700dd77cf1",
+def node_repositories(yarn_version="v1.15.2",
+                      yarn_sha256="c4feca9ba5d6bf1e820e8828609d3de733edf0e4722d17ed7ce493ed39f61abd",
                       **kwargs):
 
     http_archive(
@@ -117,13 +117,13 @@ def node_repositories(yarn_version="v1.0.1",
       build_file_content = YARN_BUILD_FILE_CONTENT,
     )
 
-    http_archive(
-      name = "yarnpkg_lockfile",
-      url = "https://registry.yarnpkg.com/@yarnpkg/lockfile/-/lockfile-1.0.0.tgz",
-      sha256 = "472add7ad141c75811f93dca421e2b7456045504afacec814b0565f092156250",
-      strip_prefix="package",
-      build_file_content =  YARN_LOCKFILE_BUILD_FILE_CONTENT,
-    )
+    # http_archive(
+    #   name = "yarnpkg_lockfile",
+    #   url = "https://registry.yarnpkg.com/@yarnpkg/lockfile/-/lockfile-1.1.1.tgz",
+    #   sha256 = "472add7ad141c75811f93dca421e2b7456045504afacec814b0565f092156251",
+    #   strip_prefix="package",
+    #   build_file_content =  YARN_LOCKFILE_BUILD_FILE_CONTENT,
+    # )
 
     _node_repository(
       name = "node",

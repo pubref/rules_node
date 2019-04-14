@@ -31,6 +31,7 @@ genrule(
 # If the test passes, we probably emitted hello world
 node_test(
     name = "helloworld_test",
+    size = "small",
     main = "helloworld.js",
     visibility = ["//visibility:public"],
 )

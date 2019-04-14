@@ -15,3 +15,8 @@ $ bazel build @yarn_modules//:polymer-cli_polymer_bin -- --help
 # Should be able to invoke polymer-cli as standalone script 
 $ ./bazel-bin/external/yarn_modules/polymer-cli_polymer_bin --help
 ```
+
+> NOTE: currently this example is not working.  When invoked,
+> polymer-cli_polymer_bin fails due to a missing module dependency `cycle`.  It
+> is currently unclear why 'cycle' is being included but not linked in the
+> dependency tree.

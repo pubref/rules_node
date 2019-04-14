@@ -39,7 +39,7 @@ function main() {
   const modules = moduleDirs.map(dir => parseNodeModulePackageJson(dir));
 
   // Iterate all the modules and merge the information from yarn into the module
-  modules.forEach(module => mergePackageJsonWithYarnEntry(entries, module));
+  modules.forEach(mod => mergePackageJsonWithYarnEntry(entries, mod));
 
   // Didn't realize that the nodejs module ecosystem can contain
   // circular references, but apparently it can.
@@ -51,15 +51,15 @@ function main() {
   print("package(default_visibility = ['//visibility:public'])");
   print("load('@org_pubref_rules_node//node:rules.bzl', 'node_module', 'node_binary')");
 
-  modules.forEach(module => printNodeModule(module));
+  modules.forEach(mod => printNodeModule(mod));
 
   printNodeModuleAll(modules);
 
   // Create an executable rule all executable entryies in the modules
-  modules.forEach(module => {
-    if (module.executables) {
-      for (const [name, path] of module.executables.entries()) {
-        printNodeBinary(module, name, path);
+  modules.forEach(mod => {
+    if (mod.executables) {
+      for (const [name, path] of mod.executables.entries()) {
+        printNodeBinary(mod, name, path);
       }
     }
   });
@@ -94,17 +94,17 @@ function findMatchingYarnEntryByNameAndVersion(entries, module) {
  * Actually, this is pretty simple as the yarn entry is simply
  * attached to the module.
  */
-function mergePackageJsonWithYarnEntry(entries, module) {
-  const entry = findMatchingYarnEntryByNameAndVersion(entries, module);
+function mergePackageJsonWithYarnEntry(entries, mod) {
+  const entry = findMatchingYarnEntryByNameAndVersion(entries, mod);
   if (!entry) {
-    throw new Error("No matching node_module found for " + module.name);
+    throw new Error("No matching node_module found for this module", mod);
   }
 
   // Use the bazelified name as the module name
-  module.original_name = module.name
-  module.name = entry.name
+  mod.original_name = mod.name
+  mod.name = entry.name
   // Store everything else here
-  module.yarn = entry;
+  mod.yarn = entry;
 }
 
 /**
@@ -117,30 +117,31 @@ function mergePackageJsonWithYarnEntry(entries, module) {
 function breakCircularDependencies(modules) {
 
   const byName = new Map();
-  modules.forEach(module => byName.set(module.name, module));
+  modules.forEach(mod => byName.set(mod.name, mod));
   
   // Make a list of nodes 
   const nodes = Array.from(byName.keys());
   // An Array<Array<number>> array for the edges
   const edges = [];
-  // And a mapping for backreferences mapped by name
-  const backrefs = new Map();
 
   // Build the adjacencyList
   nodes.forEach((node, index) => {
     const list = [];
     edges[index] = list;
-    const entry = byName.get(node);
+    const entry = byName.get(node); // get the module by name
     // Make a set of deps rather than using the entry.dependencies
     // mapping.
     entry.deps = new Set();
     
     if (entry.dependencies) {
-      
+
       Object.keys(entry.dependencies).forEach(name => {
 
         // Save this in the deps set
         const dependency = byName.get(name);
+        if (!dependency) {
+          throw new ReferenceError(`# For module ${entry.name} ${entry.version}: for some reason the module for transitive dependency ${name} was not included.  Please add it manually to your list of top-level dependencies (rule yarn_modules.deps attribute) .`);
+        }
         entry.deps.add(dependency);
         
         // Populate the adjacency list
@@ -246,8 +247,7 @@ function parseName(key, entry) {
   const at = key.indexOf("@", 1);
   entry.name = key.slice(0, at);
 
-  const label = entry.name.replace('@', 'at-');
-  entry.label = label;
+  entry.label = entry.name.replace('@', 'at-');
 }
 
   
@@ -283,26 +283,26 @@ function printJson(entry) {
 /**
  * Given a module, print a skylark `node_module` rule.
  */
-function printNodeModule(module) {
-  const deps = module.deps;
+function printNodeModule(mod) {
+  const deps = mod.deps;
   
   print(``);
-  printJson(module);
+  printJson(mod);
   print(`node_module(`);
-  print(`    name = "${module.yarn ? module.yarn.label : module.name}",`);
+  print(`    name = "${mod.yarn ? mod.yarn.label : mod.name}",`);
 
   // SCC pseudomodule wont have 'yarn' property
-  if (module.yarn) {
-    const url = module.yarn.url || module.url;
-    const sha1 = module.yarn.sha1;
-    const executables = module.executables;
+  if (mod.yarn) {
+    const url = mod.yarn.url || mod.url;
+    const sha1 = mod.yarn.sha1;
+    const executables = mod.executables;
 
-    print(`    module_name = "${module.name}",`);
-    print(`    version = "${module.version}",`);
-    print(`    package_json = "node_modules/${module.name}/package.json",`);
+    print(`    module_name = "${mod.name}",`);
+    print(`    version = "${mod.version}",`);
+    print(`    package_json = "node_modules/${mod.name}/package.json",`);
     // Exclude filenames with spaces: Bazel can't cope with them (we just have to hope they aren't needed later...)
-    print(`    srcs = glob(["node_modules/${module.name}/**/*"], exclude = [
-		"node_modules/${module.name}/package.json",
+    print(`    srcs = glob(["node_modules/${mod.name}/**/*"], exclude = [
+		"node_modules/${mod.name}/package.json",
 		"**/* *",
 	]),`);
     if (url) {
@@ -355,7 +355,9 @@ function printNodeModuleAll(modules) {
  * property, print a skylark `node_binary` rule.
  */
 function printNodeBinary(module, key, path) {
-  const name = module.name === key ? key : `${module.name}_${key}`;
+  let name = module.name === key ? key : `${module.name}_${key}`;
+  // escape special characters like '@' and '/'
+  name = name.replace('@', '').replace('/', '_')
   print(``);
   print(`node_binary(`);
   print(`    name = "${name}_bin",`);
@@ -370,23 +372,23 @@ function printNodeBinary(module, key, path) {
  * package json and return it as an object.
  */
 function parseNodeModulePackageJson(name) {
-  const module = require(`../node_modules/${name}/package.json`);
+  const mod = require(`../node_modules/${name}/package.json`);
 
   // Take this opportunity to cleanup the module.bin entries
   // into a new Map called 'executables'
-  const executables = module.executables = new Map();
-  
-  if (Array.isArray(module.bin)) {
+  const executables = mod.executables = new Map();
+
+  if (Array.isArray(mod.bin)) {
     // should not happen, but ignore it if present
-  } else if (typeof module.bin === 'string') {
-    executables.set(name, stripBinPrefix(module.bin));
-  } else if (typeof module.bin === 'object') {
-    for (let key in module.bin) {
-      executables.set(key, stripBinPrefix(module.bin[key]));
+  } else if (typeof mod.bin === 'string') {
+    executables.set(name, stripBinPrefix(mod.bin));
+  } else if (typeof mod.bin === 'object') {
+    for (let key in mod.bin) {
+      executables.set(key, stripBinPrefix(mod.bin[key]));
     }
   }
 
-  return module;  
+  return mod;  
 }
 
 /**
