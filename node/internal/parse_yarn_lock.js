@@ -51,15 +51,15 @@ function main() {
   print("package(default_visibility = ['//visibility:public'])");
   print("load('@org_pubref_rules_node//node:rules.bzl', 'node_module', 'node_binary')");
 
-  modules.forEach(module => printNodeModule(module));
+  modules.forEach(mod => printNodeModule(mod));
 
   printNodeModuleAll(modules);
 
   // Create an executable rule all executable entryies in the modules
-  modules.forEach(module => {
-    if (module.executables) {
-      for (const [name, path] of module.executables.entries()) {
-        printNodeBinary(module, name, path);
+  modules.forEach(mod => {
+    if (mod.executables) {
+      for (const [name, path] of mod.executables.entries()) {
+        printNodeBinary(mod, name, path);
       }
     }
   });
@@ -247,8 +247,7 @@ function parseName(key, entry) {
   const at = key.indexOf("@", 1);
   entry.name = key.slice(0, at);
 
-  const label = entry.name.replace('@', 'at-');
-  entry.label = label;
+  entry.label = entry.name.replace('@', 'at-');
 }
 
   
@@ -284,26 +283,26 @@ function printJson(entry) {
 /**
  * Given a module, print a skylark `node_module` rule.
  */
-function printNodeModule(module) {
-  const deps = module.deps;
+function printNodeModule(mod) {
+  const deps = mod.deps;
   
   print(``);
-  printJson(module);
+  printJson(mod);
   print(`node_module(`);
-  print(`    name = "${module.yarn ? module.yarn.label : module.name}",`);
+  print(`    name = "${mod.yarn ? mod.yarn.label : mod.name}",`);
 
   // SCC pseudomodule wont have 'yarn' property
-  if (module.yarn) {
-    const url = module.yarn.url || module.url;
-    const sha1 = module.yarn.sha1;
-    const executables = module.executables;
+  if (mod.yarn) {
+    const url = mod.yarn.url || mod.url;
+    const sha1 = mod.yarn.sha1;
+    const executables = mod.executables;
 
-    print(`    module_name = "${module.name}",`);
-    print(`    version = "${module.version}",`);
-    print(`    package_json = "node_modules/${module.name}/package.json",`);
+    print(`    module_name = "${mod.name}",`);
+    print(`    version = "${mod.version}",`);
+    print(`    package_json = "node_modules/${mod.name}/package.json",`);
     // Exclude filenames with spaces: Bazel can't cope with them (we just have to hope they aren't needed later...)
-    print(`    srcs = glob(["node_modules/${module.name}/**/*"], exclude = [
-		"node_modules/${module.name}/package.json",
+    print(`    srcs = glob(["node_modules/${mod.name}/**/*"], exclude = [
+		"node_modules/${mod.name}/package.json",
 		"**/* *",
 	]),`);
     if (url) {
@@ -356,7 +355,9 @@ function printNodeModuleAll(modules) {
  * property, print a skylark `node_binary` rule.
  */
 function printNodeBinary(module, key, path) {
-  const name = module.name === key ? key : `${module.name}_${key}`;
+  let name = module.name === key ? key : `${module.name}_${key}`;
+  // escape special characters like '@' and '/'
+  name = name.replace('@', '').replace('/', '_')
   print(``);
   print(`node_binary(`);
   print(`    name = "${name}_bin",`);

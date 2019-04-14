@@ -30,7 +30,7 @@
 ## node_repositories
 
 WORKSPACE rule that downloads and configures node based on your
-operating system.  Includes `node` (7.10.1) and `yarn` (1.0.1).
+operating system.  Includes `node` (8.15.1) and `yarn` (1.0.1).
 
 ```python
 RULES_NODE_COMMIT = '...' # Update to current HEAD

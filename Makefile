@@ -25,4 +25,5 @@ test_polymer-cli:
 test_mocha:
 	(cd tests/mocha && bazel test //...)
 
-test_all: test_helloworld test_lyrics test_express test_namespace test_typescript test_webpack test_polymer-cli test_mocha test_rollup
+# polymer cli not included as it appears to still be a WIP
+test_all: test_helloworld test_lyrics test_express test_namespace test_typescript test_webpack test_mocha test_rollup
