@@ -159,8 +159,13 @@ def _node_module_impl(ctx):
         dst = ctx.new_file("%s/%s" % (name, _get_path_for_module_file(ctx, root_file, src, sourcemap)))
         outputs.append(_copy_file(ctx, src, dst))
 
+    for src in ctx.files.data:
+        filename = src.short_path
+        dst = ctx.actions.declare_file(filename, sibling = root_file)
+        outputs.append(_copy_file(ctx, src, dst))
+
     return struct(
-        files = depset(outputs),
+        files = depset(outputs + ctx.files.data),
         node_module = struct(
             identifier = name.replace(ctx.attr.separator, '_'),
             name = name,
@@ -230,10 +235,9 @@ node_module = rule(
             single_file = True,
         ),
 
-        # Additional data files to be included in the module, but
-        # excluded from the package.json 'files' attribute.
         "data": attr.label_list(
             allow_files = True,
+            doc = "Additional data files to be included in the module, but excluded from the package.json 'files' attribute",
         ),
 
         # Module dependencies.
