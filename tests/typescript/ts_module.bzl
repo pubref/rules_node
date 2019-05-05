@@ -1,3 +1,4 @@
+load("@org_pubref_rules_node//node:internal/providers.bzl", "NodeModuleInfo")
 load("@org_pubref_rules_node//node:rules.bzl", "node_module")
 
 # Note: this is not by any means production quality support for
@@ -8,12 +9,12 @@ def _build_node_module(ctx, compilation_dir, node_module):
     """Copy the given node_module into the specified compilation dir"""
     
     outputs = []
-    for src in node_module.sources:
+    for src in node_module.sources.to_list():
         relpath = node_module.sourcemap[src.path]
-        dst = ctx.new_file("%s/node_modules/%s/%s" % (compilation_dir, node_module.name, relpath))
+        dst = ctx.actions.declare_file("%s/node_modules/%s/%s" % (compilation_dir, node_module.name, relpath))
         outputs.append(dst)
 
-        ctx.action(
+        ctx.actions.run_shell(
             mnemonic = "CopyNodeModuleForTs",
             inputs = [src],
             outputs = [dst],
@@ -36,7 +37,7 @@ def _create_tsconfig(ctx, compilation_dir, srcs):
     """Create the tsconfig.json file"""
     
     # The tsconfig file to be generated
-    tsconfig_file = ctx.new_file("%s/tsconfig.json" % compilation_dir)
+    tsconfig_file = ctx.actions.declare_file("%s/tsconfig.json" % compilation_dir)
 
     # The files that we want to compile
     files = [_get_relative_path(file, tsconfig_file) for file in srcs]
@@ -51,7 +52,7 @@ def _create_tsconfig(ctx, compilation_dir, srcs):
     content = struct(**json)
 
     # Create a file action to generate it...
-    ctx.file_action(
+    ctx.actions.write(
         output = tsconfig_file,
         content = content.to_json(),
     )
@@ -71,13 +72,13 @@ def _ts_module_impl(ctx):
     # for the compilation)
     node_modules = [] 
     for dep in ctx.attr.deps:
-        node_modules += _build_node_module(ctx, compilation_dir, dep.node_module)
+        node_modules += _build_node_module(ctx, compilation_dir, dep[NodeModuleInfo])
 
     # Copy the source files into the compilation dir.
     srcs = [] 
     for src in ctx.files.srcs:
-        copied_src = ctx.new_file("%s/%s" % (compilation_dir, src.short_path))
-        ctx.action(
+        copied_src = ctx.actions.declare_file("%s/%s" % (compilation_dir, src.short_path))
+        ctx.actions.run_shell(
             inputs = [src],
             outputs = [copied_src],
             command = "cp %s %s" % (src.path, copied_src.path),
@@ -90,12 +91,12 @@ def _ts_module_impl(ctx):
         basefile = src.short_path[0:-len(src.extension) - 1]
         if ctx.label.package:
             basefile = ctx.label.package + "/" + basefile
-        js_out = ctx.new_file("%s.js" % (basefile))
+        js_out = ctx.actions.declare_file("%s.js" % (basefile))
         outputs.append(js_out)
-        d_ts_out = ctx.new_file("%s.d.ts" % (basefile))
+        d_ts_out = ctx.actions.declare_file("%s.d.ts" % (basefile))
         outputs.append(d_ts_out)
         if (ctx.attr.sourcemap):
-            js_map_out = ctx.new_file("%s.js.map" % (basefile))
+            js_map_out = ctx.actions.declare_file("%s.js.map" % (basefile))
             outputs.append(js_map_out)
 
     # Generate a tsconfig.json file
@@ -112,7 +113,7 @@ def _ts_module_impl(ctx):
         arguments += ["--sourceMap"]
 
     # Run the compilation
-    ctx.action(
+    ctx.actions.run(
         mnemonic = "TypescriptCompile",
         inputs = inputs + node_modules + [tsconfig],
         outputs = outputs,
@@ -138,7 +139,7 @@ _ts_module = rule(
             mandatory = True,
         ),
         "deps": attr.label_list(
-            providers = ["node_module"],
+            providers = [NodeModuleInfo],
         ),
         "sourcemap": attr.bool(
             default = True,

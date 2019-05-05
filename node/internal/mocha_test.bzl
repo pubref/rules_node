@@ -1,3 +1,4 @@
+load("//node:internal/providers.bzl", "NodeModuleInfo")
 load("//node:internal/node_module.bzl", "node_module")
 load("//node:internal/node_modules.bzl", "node_modules")
 

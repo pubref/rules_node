@@ -1,3 +1,4 @@
+load("//node:internal/providers.bzl", "NodeModuleInfo", "NodeModulesInfo", "NodeBinaryInfo")
 load("//node:internal/node_modules.bzl", "node_modules")
 load("//node:internal/node_module.bzl", "node_module")
 load("//node:internal/node_bundle.bzl", "node_bundle")
@@ -15,7 +16,7 @@ def create_launcher(ctx, output_dir, node, manifest):
 
     """
 
-    entry_module = ctx.attr.entrypoint.node_module
+    entry_module = ctx.attr.entrypoint[NodeModuleInfo]
     
     # Entrypoint is a string that is used in the script for the node
     # main start point.  It can be the name of the module itself (in
@@ -94,9 +95,9 @@ def create_launcher(ctx, output_dir, node, manifest):
         ' '.join(cmd)
     ]
 
-    ctx.file_action(
+    ctx.actions.write(
         output = ctx.outputs.executable,
-        executable = True,
+        is_executable = True,
         content =  '\n'.join(lines),
     )
 
@@ -104,34 +105,35 @@ def create_launcher(ctx, output_dir, node, manifest):
 def node_binary_impl(ctx):
     target_dir = ctx.attr.target
 
-    node = ctx.new_file('%s/%s' % (target_dir, ctx.executable._node.basename))
-    ctx.action(
+    node = ctx.actions.declare_file('%s/%s' % (target_dir, ctx.executable._node.basename))
+    ctx.actions.run_shell(
         mnemonic = 'CopyNode',
-        inputs = [ctx.executable._node],
+        tools = [ctx.executable._node],
         outputs = [node],
         command = 'cp %s %s' % (ctx.executable._node.path, node.path),
     )
     
-    files = ctx.attr.node_modules.node_modules.files
-    create_launcher(ctx, target_dir, node, ctx.attr.node_modules.node_modules.manifest)
+    node_modules = ctx.attr.node_modules[NodeModulesInfo]
+    files = node_modules.files
+    create_launcher(ctx, target_dir, node, node_modules.manifest)
 
     runfiles = [node, ctx.outputs.executable] + files
-        
-    return struct(
+
+    return [DefaultInfo(
         runfiles = ctx.runfiles(
             files = runfiles,
             collect_data = True,
         ),
-        node_binary = struct(
-            files = runfiles,
-            node = node,
-        )
-    )
+    ), NodeBinaryInfo(
+        files = runfiles,
+        node = node,
+    )]        
+
 
 binary_attrs = {
     # The main entrypoint module to run
     'entrypoint': attr.label(
-        providers = ['node_module'],
+        providers = [NodeModuleInfo],
         mandatory = False,
     ),
     # An optional named executable module script to run
@@ -143,7 +145,7 @@ binary_attrs = {
     # attribute.
     'node_modules': attr.label(
         mandatory = True,
-        providers = ['node_modules'],
+        providers = [NodeModulesInfo],
     ),
     # A namespace (string) within the package where assets are built.
     # This attribute value is also passed the node_modules such that
@@ -160,8 +162,7 @@ binary_attrs = {
     # The node executable
     '_node': attr.label(
         default = Label('@node//:node'),
-        single_file = True,
-        allow_files = True,
+        allow_single_file = True,
         executable = True,
         cfg = 'host',
     ),

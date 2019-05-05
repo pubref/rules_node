@@ -1,15 +1,17 @@
 load("@bazel_tools//tools/build_defs/pkg:pkg.bzl", "pkg_tar")
+load("//node:internal/providers.bzl", "NodeBinaryInfo")
 
 def _node_bundle_impl(ctx):
-    return struct(
-        files = depset(ctx.attr.node_binary.node_binary.files),
-    )
+    return [DefaultInfo(
+        files = depset(ctx.attr.node_binary[NodeBinaryInfo].files),
+    )]
+
 
 _node_bundle = rule(
     _node_bundle_impl,
     attrs = {
         'node_binary': attr.label(
-            providers = ['node_binary'],
+            providers = [NodeBinaryInfo],
             mandatory = True,
         ),
     },
