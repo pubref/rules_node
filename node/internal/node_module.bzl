@@ -1,5 +1,6 @@
-_node_filetype = [".js", ".node"]
+load("//node:internal/providers.bzl", "NodeModuleInfo")
 
+_node_filetype = [".js", ".node"]
 
 def _relname(ctx, root_file, file):
     """Get a path string relative to the root_file (usually the
@@ -31,7 +32,7 @@ def _get_package_dependencies(module_deps):
     """
     dependencies = {}
     for dep in module_deps:
-        module = dep.node_module
+        module = dep[NodeModuleInfo]
         dependencies[module.name] = module.version
     return struct(**dependencies)
 
@@ -50,7 +51,7 @@ def _get_module_name(ctx):
 
 
 def _create_package_json(ctx, name, files, executables):
-    output_file = ctx.new_file("%s/package.json" % name)
+    output_file = ctx.actions.declare_file("%s/package.json" % name)
 
     json = {
         "name": name,
@@ -77,7 +78,7 @@ def _create_package_json(ctx, name, files, executables):
 
     content = struct(**json)
 
-    ctx.file_action(
+    ctx.actions.write(
         output = output_file,
         content = content.to_json(),
     )
@@ -86,12 +87,14 @@ def _create_package_json(ctx, name, files, executables):
 
 
 def _get_transitive_modules(deps, key):
-    modules = depset()
+    allmodules = []
     for dep in deps:
-        module = dep.node_module
-        modules += [module]
-        modules += getattr(module, key, [])
-    return modules
+        module = dep[NodeModuleInfo]
+        allmodules.append(module)
+        if hasattr(module, key):
+            allmodules += getattr(module, key).to_list()
+        # allmodules += getattr(module, key, [])
+    return depset(allmodules)
 
 
 def _get_path_for_module_file(ctx, root_file, file, sourcemap):
@@ -114,7 +117,7 @@ def _get_path_for_module_file(ctx, root_file, file, sourcemap):
 
 
 def _copy_file(ctx, src, dst):
-    ctx.action(
+    ctx.actions.run_shell(
         mnemonic = "CopyFileToNodeModule",
         inputs = [src],
         outputs = [dst],
@@ -150,13 +153,13 @@ def _node_module_impl(ctx):
 
     index_file = None
     if ctx.file.index:
-        dst = ctx.new_file("%s/index.%s" % (name, ctx.file.index.extension))
+        dst = ctx.actions.declare_file("%s/index.%s" % (name, ctx.file.index.extension))
         outputs.append(_copy_file(ctx, ctx.file.index, dst))
         index_file = dst
 
     sourcemap = {}
     for src in files:
-        dst = ctx.new_file("%s/%s" % (name, _get_path_for_module_file(ctx, root_file, src, sourcemap)))
+        dst = ctx.actions.declare_file("%s/%s" % (name, _get_path_for_module_file(ctx, root_file, src, sourcemap)))
         outputs.append(_copy_file(ctx, src, dst))
 
     for src in ctx.files.data:
@@ -164,26 +167,19 @@ def _node_module_impl(ctx):
         dst = ctx.actions.declare_file(filename, sibling = root_file)
         outputs.append(_copy_file(ctx, src, dst))
 
-    return struct(
+    return [DefaultInfo(
         files = depset(outputs + ctx.files.data),
-        node_module = struct(
-            identifier = name.replace(ctx.attr.separator, '_'),
-            name = name,
-            version = ctx.attr.version,
-            url = ctx.attr.url,
-            sha1 = ctx.attr.sha1,
-            description = ctx.attr.description,
-            executables = executables,
-            package_json = package_json,
-            root = root_file,
-            sourcemap = sourcemap,
-            index = index_file,
-            files = depset(outputs),
-            sources = depset(files),
-            transitive_deps = _get_transitive_modules(ctx.attr.deps, "transitive_deps"),
-            transitive_dev_deps = _get_transitive_modules(ctx.attr.dev_deps, "transitive_dev_deps"),
-        ),
-    )
+    ), NodeModuleInfo(
+        identifier = name.replace(ctx.attr.separator, '_'),
+        name = name,
+        version = ctx.attr.version,
+        url = ctx.attr.url,
+        sha1 = ctx.attr.sha1,
+        executables = executables,
+        package_json = package_json,
+        files = depset(outputs),
+        transitive_deps = _get_transitive_modules(ctx.attr.deps, "transitive_deps"),
+    )]
 
 
 node_module = rule(
@@ -231,8 +227,8 @@ node_module = rule(
         # the module.  If not present, one will be generated UNLESS an
         # index file is provided.
         "package_json": attr.label(
-            allow_files = ["package.json"],
-            single_file = True,
+            # allow_files = ["package.json"],
+            allow_single_file = True,
         ),
 
         "data": attr.label_list(
@@ -242,12 +238,12 @@ node_module = rule(
 
         # Module dependencies.
         "deps": attr.label_list(
-            providers = ["node_module"],
+            providers = [NodeModuleInfo],
         ),
 
         # Development-only module dependencies.
         "dev_deps": attr.label_list(
-            providers = ["node_module"],
+            providers = [NodeModuleInfo],
         ),
 
         # 'Binary' scripts, to be named in the 'package_json.bin'
@@ -279,17 +275,16 @@ node_module = rule(
         # File that should be named as the package.json 'main'
         # attribute.
         "main": attr.label(
-            allow_files = True,
             mandatory = False,
-            single_file = True,
+            allow_single_file = True,
         ),
 
         # File that should be copied to the module root as 'index.js'.
         # If the index file is present and no 'main' is provided, a
         # package.json file will not be generated.
         "index": attr.label(
-            allow_files = _node_filetype,
-            single_file = True,
+            # allow_files = _node_filetype,
+            allow_single_file = True,
         ),
     },
 )

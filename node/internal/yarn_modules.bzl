@@ -105,29 +105,27 @@ yarn_modules = repository_rule(
         "_node": attr.label(
             # FIXME(pcj): This is going to invalid for windows
             default = Label("@node//:bin/node"),
-            single_file = True,
-            allow_files = True,
+            allow_single_file = True,
             executable = True,
             cfg = "host",
         ),
         "_node_exe": attr.label(
             default = Label("@node//:node.exe"),
-            single_file = True,
-            allow_files = True,
+            allow_single_file = True,
             executable = True,
             cfg = "host",
         ),
         "_parse_yarn_lock_js": attr.label(
             default = Label("//node:internal/parse_yarn_lock.js"),
-            single_file = True,
+            allow_single_file = True,
         ),
         "_clean_node_modules_js": attr.label(
             default = Label("//node:internal/clean_node_modules.js"),
-            single_file = True,
+            allow_single_file = True,
         ),
         "_yarn_js": attr.label(
             default = Label("@yarn//:bin/yarn.js"),
-            single_file = True,
+            allow_single_file = True,
         ),
         # If specififed, augment the PATH environment variable with these
         # tools during 'yarn install'.
