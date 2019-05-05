@@ -57,14 +57,17 @@ def _yarn_modules_impl(ctx):
     execute(ctx, ["cp", clean_node_modules_js, "internal/clean_node_modules.js"])
     execute(ctx, ["cp", yarn_js, "yarn.js"])
 
-    install_path = [node.dirname]
+    # build a path for the install command.  NOTE: newer versions of bazel
+    # complaining about 'path' entries in the list, hence the extra %s
+    # formatting.
+    install_path = ["%s" % node.dirname]
     for tool in ctx.attr.install_tools:
         tool_path = ctx.which(tool)
         if not tool_path:
             fail("Required install tool '%s' is not in the PATH" % tool, "install_tools")
-        install_path.append(tool_path.dirname)
+        install_path.append("%s" % tool_path.dirname)
     install_path.append("$PATH")
-
+    
     # Build node_modules via 'yarn install'
     execute(ctx, [node, yarn_js, "install"], quiet = True, environment = {
         "PATH": ":".join(install_path),
