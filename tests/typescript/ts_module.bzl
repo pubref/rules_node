@@ -1,4 +1,5 @@
-load("@org_pubref_rules_node//node/internl:node_module.bzl", "node_module", "NodeModuleInfo")
+load("@org_pubref_rules_node//node:internal/providers.bzl", "NodeModuleInfo")
+load("@org_pubref_rules_node//node:rules.bzl", "node_module")
 
 # Note: this is not by any means production quality support for
 # typescript.  It's more of an experiment to exercise the
@@ -8,12 +9,12 @@ def _build_node_module(ctx, compilation_dir, node_module):
     """Copy the given node_module into the specified compilation dir"""
     
     outputs = []
-    for src in node_module.sources:
+    for src in node_module.sources.to_list():
         relpath = node_module.sourcemap[src.path]
         dst = ctx.actions.declare_file("%s/node_modules/%s/%s" % (compilation_dir, node_module.name, relpath))
         outputs.append(dst)
 
-        ctx.action(
+        ctx.actions.run_shell(
             mnemonic = "CopyNodeModuleForTs",
             inputs = [src],
             outputs = [dst],
@@ -71,13 +72,13 @@ def _ts_module_impl(ctx):
     # for the compilation)
     node_modules = [] 
     for dep in ctx.attr.deps:
-        node_modules += _build_node_module(ctx, compilation_dir, dep.node_module)
+        node_modules += _build_node_module(ctx, compilation_dir, dep[NodeModuleInfo])
 
     # Copy the source files into the compilation dir.
     srcs = [] 
     for src in ctx.files.srcs:
         copied_src = ctx.actions.declare_file("%s/%s" % (compilation_dir, src.short_path))
-        ctx.action(
+        ctx.actions.run_shell(
             inputs = [src],
             outputs = [copied_src],
             command = "cp %s %s" % (src.path, copied_src.path),
@@ -112,7 +113,7 @@ def _ts_module_impl(ctx):
         arguments += ["--sourceMap"]
 
     # Run the compilation
-    ctx.action(
+    ctx.actions.run(
         mnemonic = "TypescriptCompile",
         inputs = inputs + node_modules + [tsconfig],
         outputs = outputs,

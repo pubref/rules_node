@@ -177,6 +177,8 @@ def _node_module_impl(ctx):
         executables = executables,
         package_json = package_json,
         files = depset(outputs),
+        sources = depset(files),
+        sourcemap = sourcemap,
         transitive_deps = _get_transitive_modules(ctx.attr.deps, "transitive_deps"),
     )]
 

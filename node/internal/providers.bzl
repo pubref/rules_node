@@ -22,6 +22,8 @@ NodeModuleInfo = provider(
         "sha1": "the module sha1 (string)",
         "package_json": "the package.json file (File)",
         "files": "the complete set of files in the module",
+        "sources": "the set of source files in the module",
+        "sourcemap": "the sourcemap file",
         "executables": "the set of executable targets",
         "transitive_deps": "the set of transitive node module dependencies",
     },
