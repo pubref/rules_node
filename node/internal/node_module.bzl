@@ -87,14 +87,13 @@ def _create_package_json(ctx, name, files, executables):
 
 
 def _get_transitive_modules(deps, key):
-    allmodules = []
+    modules = []
     for dep in deps:
         module = dep[NodeModuleInfo]
-        allmodules.append(module)
+        modules.append(module)
         if hasattr(module, key):
-            allmodules += getattr(module, key).to_list()
-        # allmodules += getattr(module, key, [])
-    return depset(allmodules)
+            modules += getattr(module, key).to_list()
+    return depset(modules)
 
 
 def _get_path_for_module_file(ctx, root_file, file, sourcemap):
